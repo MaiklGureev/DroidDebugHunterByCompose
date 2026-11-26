@@ -4,29 +4,36 @@ import java.io.File
 import java.util.UUID
 import kotlinx.coroutines.*
 
-enum class AdbAction(val title: String, val app: Boolean = true, val destructive: Boolean = false) {
-    Start("Запустить"),
-    Stop("Остановить"),
-    Restart("Перезапустить"),
-    Debug("Запустить с JDWP"),
-    RestartDebug("Перезапустить с JDWP"),
-    Clear("Очистить данные", destructive = true),
-    ClearStart("Очистить и запустить", destructive = true),
-    Uninstall("Удалить для профиля", destructive = true),
-    AppSettings("Настройки приложения"),
-    AppInfo("Информация / APK"),
-    AppProcesses("Процессы приложения"),
-    AppLogs("Последние логи"),
-    Grant("Выдать разрешение"),
-    Revoke("Отозвать разрешение"),
-    WifiOn("Включить Wi-Fi", false),
-    WifiOff("Выключить Wi-Fi", false),
-    DataOn("Включить мобильные данные", false),
-    DataOff("Выключить мобильные данные", false),
-    Network("IP / маршруты / прокси", false),
-    WifiSettings("Настройки Wi-Fi", false),
-    DeviceInfo("Сведения об устройстве", false),
-    Processes("Все процессы", false),
+enum class AdbAction(
+    private val titleKey: String,
+    val app: Boolean = true,
+    val destructive: Boolean = false,
+) {
+    Start("Launch"),
+    Stop("Stop"),
+    Restart("Restart"),
+    Debug("Launch with JDWP"),
+    RestartDebug("Restart with JDWP"),
+    Clear("Clear data", destructive = true),
+    ClearStart("Clear and launch", destructive = true),
+    Uninstall("Uninstall for profile", destructive = true),
+    AppSettings("App settings"),
+    AppInfo("Information / APK"),
+    AppProcesses("App processes"),
+    AppLogs("Recent logs"),
+    Grant("Grant permission"),
+    Revoke("Revoke permission"),
+    WifiOn("Enable Wi-Fi", false),
+    WifiOff("Disable Wi-Fi", false),
+    DataOn("Enable mobile data", false),
+    DataOff("Disable mobile data", false),
+    Network("IP / routes / proxy", false),
+    WifiSettings("Wi-Fi settings", false),
+    DeviceInfo("Device information", false),
+    Processes("All processes", false);
+
+    val title
+        get() = tr(titleKey)
 }
 
 class Adb(private val settings: Settings) {
@@ -56,10 +63,12 @@ class Adb(private val settings: Settings) {
         require(
             address.matches(Regex("(?:[A-Za-z0-9][A-Za-z0-9.:-]*|\\[[a-fA-F0-9:]+]):[0-9]{1,5}"))
         ) {
-            "Укажите IP:порт"
+            tr("Enter IP:port")
         }
         if (code.isNotBlank())
-            require(code.matches(Regex("[0-9]{6}"))) { "Код сопряжения должен содержать 6 цифр" }
+            require(code.matches(Regex("[0-9]{6}"))) {
+                tr("The pairing code must contain 6 digits")
+            }
         val result = if (code.isBlank()) run("connect", address) else run("pair", address, code)
         val output = result.requireSuccess()
         check(!Regex("(?i)failed|cannot|unable|error").containsMatchIn(output)) { output }
@@ -70,7 +79,7 @@ class Adb(private val settings: Settings) {
         coroutineScope {
             val user =
                 shell(serial, "am get-current-user").toIntOrNull()
-                    ?: error("Не удалось определить профиль Android")
+                    ?: error(tr("Cannot determine the Android profile"))
             val installed = async { shell(serial, "pm list packages -U --user $user") }
             val system = async { shell(serial, "pm list packages -s --user $user") }
             val names = async {
@@ -79,7 +88,7 @@ class Adb(private val settings: Settings) {
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
-                    onWarning("Названия приложений недоступны: ${e.message}")
+                    onWarning(tr("App labels unavailable: {0}", e.message))
                     emptyMap()
                 }
             }
@@ -91,7 +100,7 @@ class Adb(private val settings: Settings) {
             val labels = names.await()
             val apps = parseApplications(installed.await(), user, systemPackages, labels)
             check(shell(serial, "am get-current-user") == user.toString()) {
-                "Профиль Android изменился во время загрузки. Обновите приложения."
+                tr("The Android profile changed while loading. Refresh apps.")
             }
             apps
         }
@@ -137,7 +146,7 @@ class Adb(private val settings: Settings) {
     suspend fun validateApp(serial: String, app: AndroidApp) {
         validateName(app.packageName)
         check(shell(serial, "am get-current-user") == app.user.toString()) {
-            "Профиль Android изменился. Обновите приложения."
+            tr("The Android profile changed. Refresh apps.")
         }
         val current =
             parseApplications(
@@ -149,7 +158,7 @@ class Adb(private val settings: Settings) {
                 )
                 .singleOrNull { it.packageName == app.packageName }
         check(current != null && (app.uid == null || current.uid == app.uid)) {
-            "Пакет удалён или UID изменился. Обновите приложения."
+            tr("The package was removed or its UID changed. Refresh apps.")
         }
     }
 
@@ -161,7 +170,7 @@ class Adb(private val settings: Settings) {
     }
 
     private suspend fun pids(serial: String, app: AndroidApp): List<String> {
-        require(app.uid != null) { "Android не предоставил UID" }
+        require(app.uid != null) { tr("Android did not provide a UID") }
         return Regex("(?m)^\\s*(\\d+)\\s+(\\d+)\\s+(\\S+)\\s*$")
             .findAll(shell(serial, "ps -A -o UID,PID,NAME"))
             .filter {
@@ -180,7 +189,7 @@ class Adb(private val settings: Settings) {
         permission: String = "",
     ): String {
         if (action.app) {
-            requireNotNull(app) { "Выберите приложение из списка" }
+            requireNotNull(app) { tr("Select an app from the list") }
             validateApp(serial, app)
         }
         val pkg = quote(app?.packageName ?: "")
@@ -188,7 +197,7 @@ class Adb(private val settings: Settings) {
         if (action == AdbAction.Grant || action == AdbAction.Revoke) {
             validateName(permission)
             require(permissions(serial, app!!).any { it.name == permission }) {
-                "Выберите объявленное опасное runtime-разрешение"
+                tr("Select a declared dangerous runtime permission")
             }
             shell(
                 serial,
@@ -196,7 +205,7 @@ class Adb(private val settings: Settings) {
             )
             val actual = permissions(serial, app).single { it.name == permission }
             check(actual.granted == null || actual.granted == (action == AdbAction.Grant)) {
-                "Android не подтвердил изменение"
+                tr("Android did not confirm the change")
             }
             return "${actual.name} · granted=${actual.granted}"
         }
@@ -221,17 +230,17 @@ class Adb(private val settings: Settings) {
                     .lastOrNull {
                         it.matches(Regex("[A-Za-z][\\w.]*/[A-Za-z_.$][\\w.$]*")) &&
                             it.startsWith(app!!.packageName + "/")
-                    } ?: error("У приложения нет launcher-активности")
+                    } ?: error(tr("The app has no launcher activity"))
             if (debugging) {
                 check(
                     Regex("(?s)\\b(?:flags|pkgFlags)=\\[[^]]*\\bDEBUGGABLE\\b")
                         .containsMatchIn(shell(serial, "dumpsys package $pkg"))
                 ) {
-                    "JDWP требует debuggable-приложение"
+                    tr("JDWP requires a debuggable app")
                 }
                 if (action == AdbAction.Debug)
                     check(pids(serial, app!!).isEmpty()) {
-                        "Приложение работает. Выберите «Перезапустить с JDWP»."
+                        tr("The app is running. Select “Restart with JDWP”.")
                     }
             }
         }
@@ -244,7 +253,7 @@ class Adb(private val settings: Settings) {
                     "pm ${if (action == AdbAction.Uninstall) "uninstall" else "clear"} --user $user $pkg",
                 )
             check(result.lineSequence().any { it.trim() == "Success" }) {
-                "Android не подтвердил действие: $result"
+                tr("Android did not confirm the operation: {0}", result)
             }
             if (!starting) return result
         }
@@ -256,8 +265,8 @@ class Adb(private val settings: Settings) {
         if (action == AdbAction.AppProcesses || action == AdbAction.AppLogs) {
             val ids = pids(serial, app!!)
             if (action == AdbAction.AppProcesses)
-                return "PID: ${ids.joinToString().ifBlank { "процессы не запущены" }}"
-            check(ids.isNotEmpty()) { "Приложение не запущено" }
+                return "PID: ${ids.joinToString().ifBlank { tr("no processes running") }}"
+            check(ids.isNotEmpty()) { tr("The app is not running") }
             return ids.take(8)
                 .map { "PID $it\n" + shell(serial, "logcat -d -t 200 --pid=$it -v threadtime") }
                 .joinToString("\n\n")
@@ -288,12 +297,12 @@ class Adb(private val settings: Settings) {
                         "dumpsys battery",
                     )
                 AdbAction.Processes -> listOf("ps -A")
-                else -> error("Неизвестное действие")
+                else -> error(tr("Unknown operation"))
             }
         return commands
             .map { "$ $it\n${shell(serial,it)}" }
             .joinToString("\n\n")
-            .ifBlank { "Команда выполнена" }
+            .ifBlank { tr("Command completed") }
     }
 
     suspend fun architecture(serial: String, app: AndroidApp? = null): String {
@@ -315,7 +324,7 @@ class Adb(private val settings: Settings) {
 
         fun validateName(value: String) {
             require(value.matches(Regex("[A-Za-z][A-Za-z0-9_]*(?:\\.[A-Za-z0-9_]+)*"))) {
-                "Некорректный пакет / разрешение"
+                tr("Invalid package / permission")
             }
         }
 
@@ -326,7 +335,7 @@ class Adb(private val settings: Settings) {
                 "armeabi" -> "arm"
                 "x86_64" -> "x86_64"
                 "x86" -> "x86"
-                else -> error("Неизвестная ABI: $abi")
+                else -> error(tr("Unknown ABI: {0}", abi))
             }
 
         fun parseDevices(output: String) =
@@ -394,13 +403,13 @@ class Adb(private val settings: Settings) {
         }
 
         fun validateElf(file: File, arch: String) {
-            require(file.isFile) { "Файл не найден: $file" }
+            require(file.isFile) { tr("File not found: {0}", file) }
             val header = file.inputStream().use { it.readNBytes(20) }
             require(
                 header.size == 20 &&
                     header.take(4) == listOf(0x7f.toByte(), 69.toByte(), 76.toByte(), 70.toByte())
             ) {
-                "Файл не является ELF"
+                tr("The file is not ELF")
             }
             val machine = (header[18].toInt() and 255) or ((header[19].toInt() and 255) shl 8)
             val expected =
@@ -409,13 +418,13 @@ class Adb(private val settings: Settings) {
                     "arm" to (1 to 40),
                     "x86_64" to (2 to 62),
                     "x86" to (1 to 3),
-                )[arch] ?: error("Неизвестная архитектура")
+                )[arch] ?: error(tr("Unknown architecture"))
             require(
                 header[5] == 1.toByte() &&
                     header[4].toInt() == expected.first &&
                     machine == expected.second
             ) {
-                "ELF не соответствует $arch"
+                tr("ELF does not match {0}", arch)
             }
         }
     }

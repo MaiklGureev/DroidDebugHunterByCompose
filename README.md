@@ -6,7 +6,7 @@ An Android debugging desktop application built with **Kotlin, Compose Desktop an
 
 [Download a release](https://github.com/MaiklGureev/DroidDebugHunterByCompose/releases) · [Documentation](docs/README.md) · [Android setup](src/main/resources/runtime/help/ANDROID_SETUP_GUIDE.en.md) · [MIT license](LICENSE)
 
-Native distributions include their own Java runtime: **users do not need a system JDK or JRE**. Downloads support Windows x64, Linux x64, and macOS Apple Silicon and Intel. ADB, Python and capture tools are configured separately. The desktop UI is currently in Russian; the English guides retain UI labels where useful.
+Native distributions include their own Java runtime: **users do not need a system JDK or JRE**. Downloads support Windows x64, Linux x64, and macOS Apple Silicon and Intel. ADB, Python and capture tools are configured separately. The interface supports English and Russian. Switch in Settings → Interface language; the choice is saved automatically and applies immediately, including offline Help. The initial language follows the OS (Russian for ru, English otherwise).
 
 ## Features
 

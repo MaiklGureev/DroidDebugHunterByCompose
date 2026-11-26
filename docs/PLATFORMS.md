@@ -21,7 +21,7 @@ JDK 17 is needed only for development, Gradle, tests and packaging. `gradlew run
 
 ARM64 hosts use `windows-arm64` / `linux-arm64` directories, but compatible tools/wheels need separate verification; these are not currently published release targets. If official Linux ADB does not match your CPU, install native ADB from the distribution and configure its path.
 
-Packaged bundles are read from the app's `tools/` resources. You can select any accessible directory when no bundle exists. Tool paths are saved separately by OS/CPU; old Windows settings migrate only on Windows. UI settings are shared.
+Packaged bundles are read from the app's `tools/` resources. You can select any accessible directory when no bundle exists. Tool paths are saved separately by OS/CPU; old Windows settings migrate only on Windows. UI settings, including interface language, are shared between platform profiles. Settings → Interface language switches English/Russian immediately and saves the choice for subsequent launches. Without a saved choice, ru system locales use Russian and other locales use English.
 
 ADB discovery: bundle → `ANDROID_SDK_ROOT` / `ANDROID_HOME` and standard Android SDK locations → PATH. Python discovery: local `python/` or `.venv/` → PATH; macOS also checks standard Homebrew locations. Leave executable fields empty for discovery. Explicit paths have priority.
 

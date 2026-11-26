@@ -58,7 +58,7 @@ private fun launchHunter() = application {
                         true
                     }
                     event.isPlatformShortcutPressed && event.key == Key.O -> {
-                        chooseFile(title = "Импорт HAR")?.let(model::importHar)
+                        chooseFile(title = tr("Import HAR"))?.let(model::importHar)
                         true
                     }
                     else -> false

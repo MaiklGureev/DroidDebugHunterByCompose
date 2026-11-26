@@ -4,6 +4,10 @@
 
 A Kotlin + Compose Desktop app for Windows, macOS and Linux. Native packages include Java; a system JDK/JRE is not required. Source development uses JDK 17 and `gradlew run` / IDEA's `desktop` configuration. See [platform setup](PLATFORMS.en.md).
 
+## Interface language
+
+Choose English or Русский in Settings → Interface language. The interface and Help update immediately; the choice is saved automatically. The initial language is Russian for ru system locales and English otherwise. Captured data, user text and existing operation output retain their original content.
+
 ## Get started
 
 Analyze HAR immediately: Ctrl+O and choose a file, or try the repository's synthetic sample. No phone, ADB or Python is needed.

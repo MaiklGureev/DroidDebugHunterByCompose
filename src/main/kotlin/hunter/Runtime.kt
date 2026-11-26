@@ -24,7 +24,7 @@ object AppFiles {
         val loader = AppFiles::class.java.classLoader
         val manifest =
             loader.getResourceAsStream("runtime-manifest.txt")
-                ?: error("Не найден runtime-manifest.txt")
+                ?: error(tr("runtime-manifest.txt not found"))
         manifest.bufferedReader().useLines { lines ->
             lines.forEach { raw ->
                 val name = raw.trim().removePrefix("\uFEFF")
@@ -33,7 +33,7 @@ object AppFiles {
                     require(target.canonicalPath.startsWith(data.canonicalPath + File.separator))
                     val bytes =
                         loader.getResourceAsStream(name)?.use { it.readBytes() }
-                            ?: error("Нет ресурса $name")
+                            ?: error(tr("Missing resource {0}", name))
                     if (!target.exists() || !target.readBytes().contentEquals(bytes)) {
                         target.parentFile.mkdirs()
                         atomicWrite(target, bytes)
@@ -92,6 +92,7 @@ data class Settings(
     val vpnPort: String = "51820",
     val spawn: Boolean = true,
     val gadget: Boolean = false,
+    val language: UiLanguage = UiLanguage.default(),
 ) {
     val adbCommand
         get() = ToolResolver.adb(adb, File(tools))
@@ -132,6 +133,7 @@ data class Settings(
                     "vpnPort" to vpnPort,
                     "spawn" to spawn,
                     "gadget" to gadget,
+                    "language" to language.code,
                 )
                 .forEach { (k, v) -> p.setProperty(k, v.toString()) }
             val output = java.io.ByteArrayOutputStream()
@@ -169,6 +171,7 @@ data class Settings(
                 vpnPort = s("vpnPort", "51820"),
                 spawn = s("spawn", "true").toBoolean(),
                 gadget = s("gadget").toBoolean(),
+                language = UiLanguage.fromCode(s("language")),
             )
         }
     }
@@ -179,7 +182,7 @@ data class CommandResult(val code: Int, val output: String, val error: String) {
         get() = listOf(output.trim(), error.trim()).filter { it.isNotEmpty() }.joinToString("\n")
 
     fun requireSuccess(): String {
-        check(code == 0) { text.ifBlank { "Код завершения: $code" } }
+        check(code == 0) { text.ifBlank { tr("Exit code: {0}", code) } }
         return output.trim()
     }
 }
@@ -203,7 +206,7 @@ object Processes {
         withContext(Dispatchers.IO + NonCancellable) {
             kill(process)
             check(process.waitFor(3000, TimeUnit.MILLISECONDS)) {
-                "Не удалось завершить собственный процесс ${process.pid()}"
+                tr("Could not terminate owned process {0}", process.pid())
             }
         }
 

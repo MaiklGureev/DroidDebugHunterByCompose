@@ -124,6 +124,8 @@ def runtime_check():
             raise ValueError('Native launcher used an unexpected runtime or platform')
         if data.get('deviceSelection') is not True or data.get('shutdown') is not True:
             raise ValueError('Packaged application selection/shutdown check failed')
+        if data.get('languagePersistence') is not True:
+            raise ValueError('Packaged application language persistence check failed')
         print('Bundled runtime startup verified: ' + data['javaVersion'] + ' / ' + data['platform'])
 
 

@@ -19,7 +19,7 @@ enum class HostOs(val id: String, val title: String) {
                 name.contains("mac", true) || name.contains("darwin", true) -> MacOS
                 name.startsWith("Windows", true) -> Windows
                 name.contains("linux", true) -> Linux
-                else -> error("Неподдерживаемая ОС: $name")
+                else -> error(tr("Unsupported OS: {0}", name))
             }
     }
 }
@@ -66,7 +66,7 @@ data class HostPlatform(val os: HostOs, val arch: String) {
                     "x64" -> "x64"
                     "aarch64",
                     "arm64" -> "arm64"
-                    else -> error("Неподдерживаемая архитектура: $arch")
+                    else -> error(tr("Unsupported architecture: {0}", arch))
                 },
             )
 

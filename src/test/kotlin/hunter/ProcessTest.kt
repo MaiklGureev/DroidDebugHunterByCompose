@@ -66,6 +66,7 @@ class ProcessTest {
         val data = parseObject(report.readText())
         assertTrue(data.flag("deviceSelection"))
         assertTrue(data.flag("shutdown"))
+        assertTrue(data.flag("languagePersistence"))
         assertTrue(data.text("applicationSource").isNotBlank())
         assertEquals("sentinel", sentinel.readText())
     }

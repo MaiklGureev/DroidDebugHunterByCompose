@@ -271,7 +271,7 @@ fun MonoText(value: String, modifier: Modifier = Modifier) {
             Text(
                 value.take(524288) +
                     (if (value.length > 524288)
-                        "\n\n[Показаны первые 512 КБ. Сохраните файл для полного просмотра.]"
+                        tr("\n\n[Showing the first 512 KB. Save the file for full output.]")
                     else ""),
                 Modifier.fillMaxSize()
                     .padding(14.dp)
@@ -297,7 +297,7 @@ fun MonoText(value: String, modifier: Modifier = Modifier) {
 fun chooseFile(
     save: Boolean = false,
     name: String = "",
-    title: String = if (save) "Сохранить файл" else "Открыть файл",
+    title: String = if (save) tr("Save file") else tr("Open file"),
     extension: String = "",
 ): File? {
     // An unowned native chooser remains independently selectable in Windows,
@@ -321,15 +321,15 @@ fun chooseFile(
 fun copyText(model: AppState, text: String) {
     try {
         Toolkit.getDefaultToolkit().systemClipboard.setContents(StringSelection(text), null)
-        model.status = "Скопировано в буфер обмена"
+        model.status = tr("Copied to clipboard")
     } catch (e: Exception) {
-        model.error = e.message ?: "Буфер обмена недоступен"
+        model.error = e.message ?: tr("Clipboard unavailable")
     }
 }
 
 fun openFile(model: AppState, file: File) {
     try {
-        file.takeIf { it.exists() } ?: error("Файл не найден: $file")
+        file.takeIf { it.exists() } ?: error(tr("File not found: {0}", file))
         if (
             java.awt.Desktop.isDesktopSupported() &&
                 java.awt.Desktop.getDesktop().isSupported(java.awt.Desktop.Action.OPEN)
@@ -340,13 +340,13 @@ fun openFile(model: AppState, file: File) {
                 when (HostPlatform.current.os) {
                     HostOs.MacOS -> "open"
                     HostOs.Linux -> "xdg-open"
-                    HostOs.Windows -> error("Открытие файлов недоступно в этом окружении")
+                    HostOs.Windows -> error(tr("Opening files is unavailable in this environment"))
                 }
-            model.task("Открытие файла") {
+            model.task(tr("Opening file")) {
                 Processes.run(listOf(command, file.absolutePath)).requireSuccess()
             }
         }
     } catch (e: Exception) {
-        model.error = e.message ?: "Не удалось открыть файл"
+        model.error = e.message ?: tr("Cannot open file")
     }
 }

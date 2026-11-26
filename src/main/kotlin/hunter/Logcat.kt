@@ -26,20 +26,18 @@ class LogcatSession(
     suspend fun start() {
         val adb = Adb(settings)
         check(adb.device(serial, "get-state").requireSuccess() == "device") {
-            "Устройство недоступно"
+            tr("Device unavailable")
         }
         if (options.appOnly) {
-            require(app?.uid != null) { "Выберите приложение с UID" }
+            require(app?.uid != null) { tr("Select an app with a UID") }
             adb.validateApp(serial, app)
         }
         val help = adb.device(serial, "logcat", "--help").requireSuccess()
-        check(help.contains("-T")) {
-            "Прошивка не поддерживает ограниченную начальную историю (-T)"
-        }
+        check(help.contains("-T")) { tr("Firmware does not support bounded initial history (-T)") }
         val filterUid = help.contains("--uid")
         val formatUid = Regex("(?im)^\\s*uid\\b").containsMatchIn(help)
         require(!options.appOnly || filterUid || formatUid) {
-            "Прошивка не поддерживает точную фильтрацию по UID"
+            tr("Firmware does not support exact UID filtering")
         }
         val args = mutableListOf(settings.adbCommand, "-s", serial, "logcat", "-v", "threadtime")
         if (help.contains("year")) args += listOf("-v", "year")
@@ -100,7 +98,7 @@ class LogcatSession(
                             },
                             { log(it) },
                         )
-                    if (!stopping) log("Logcat завершился: $code")
+                    if (!stopping) log(tr("Logcat exited: {0}", code))
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
@@ -120,12 +118,14 @@ class LogcatSession(
                     } catch (e: CancellationException) {
                         throw e
                     } catch (e: Exception) {
-                        log("Logcat остановлен: ${e.message}")
+                        log(tr("Logcat stopped: {0}", e.message))
                         ended()
                     }
                 }
         delay(200)
-        check(reader?.isActive == true) { "Logcat завершился сразу после запуска. См. журнал." }
+        check(reader?.isActive == true) {
+            tr("Logcat exited immediately after startup. See the journal.")
+        }
     }
 
     suspend fun stop() =

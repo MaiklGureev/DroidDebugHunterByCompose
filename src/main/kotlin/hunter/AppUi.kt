@@ -55,7 +55,7 @@ fun HunterApp(model: AppState, closing: Boolean) {
                                 true
                             }
                             event.isPlatformShortcutPressed && event.key == Key.O -> {
-                                chooseFile(title = "Импорт HAR")?.let(model::importHar)
+                                chooseFile(title = tr("Import HAR"))?.let(model::importHar)
                                 true
                             }
                             else -> false
@@ -92,7 +92,7 @@ fun HunterApp(model: AppState, closing: Boolean) {
                         }
                         Spacer(Modifier.height(22.dp))
                         Text(
-                            "РАБОЧЕЕ ПРОСТРАНСТВО",
+                            tr("WORKSPACE"),
                             Modifier.padding(start = 10.dp, bottom = 12.dp),
                             fontSize = 9.sp,
                             color = Muted,
@@ -107,8 +107,8 @@ fun HunterApp(model: AppState, closing: Boolean) {
                                 Modifier.padding(10.dp),
                                 verticalArrangement = Arrangement.spacedBy(6.dp),
                             ) {
-                                if (model.capturing) Pill("●  Захват активен")
-                                if (model.logging) Pill("●  Logcat записывается", Accent)
+                                if (model.capturing) Pill(tr("●  Capture active"))
+                                if (model.logging) Pill(tr("●  Logcat recording"), Accent)
                             }
                         NavigationItem(Page.Settings, model.page == Page.Settings) {
                             model.page = Page.Settings
@@ -130,7 +130,7 @@ fun HunterApp(model: AppState, closing: Boolean) {
                             MiniIcon(
                                 if (model.settings.dark) Icons.Outlined.LightMode
                                 else Icons.Outlined.DarkMode,
-                                "Переключить тему",
+                                tr("Switch theme"),
                             ) {
                                 model.updateSettings(
                                     model.settings.copy(dark = !model.settings.dark)
@@ -159,19 +159,19 @@ fun HunterApp(model: AppState, closing: Boolean) {
                                 Choice(
                                     model.selectedDevice,
                                     model.devices.map { it as Device? },
-                                    { it?.label ?: "Выберите устройство" },
+                                    { it?.label ?: tr("Select a device") },
                                     { it?.let(model::selectDevice) },
                                     enabled = model.busy.isEmpty(),
                                 )
                             }
                             MiniIcon(
                                 Icons.Outlined.Refresh,
-                                "Обновить устройства",
+                                tr("Refresh devices"),
                                 !model.refreshing && model.busy.isEmpty(),
                             ) {
-                                model.task("Обновление устройств") { model.refreshDevices(true) }
+                                model.task(tr("Refreshing devices")) { model.refreshDevices(true) }
                             }
-                            MiniIcon(Icons.Outlined.Search, "Команды · Ctrl+K") {
+                            MiniIcon(Icons.Outlined.Search, tr("Commands · Ctrl+K")) {
                                 model.palette = true
                             }
                         }
@@ -202,7 +202,7 @@ fun HunterApp(model: AppState, closing: Boolean) {
                                         color = MaterialTheme.colors.error,
                                         maxLines = 4,
                                     )
-                                    MiniIcon(Icons.Outlined.Close, "Скрыть ошибку") {
+                                    MiniIcon(Icons.Outlined.Close, tr("Dismiss error")) {
                                         model.error = ""
                                     }
                                 }
@@ -222,7 +222,7 @@ fun HunterApp(model: AppState, closing: Boolean) {
                     if (journalVisible)
                         Column(Modifier.fillMaxWidth().height(170.dp).padding(horizontal = 22.dp)) {
                             Text(
-                                "Журнал приложения · ${model.journal.size}",
+                                tr("Application journal · {0}", model.journal.size),
                                 color = Muted,
                                 fontSize = 11.sp,
                                 modifier = Modifier.padding(bottom = 6.dp),
@@ -240,7 +240,7 @@ fun HunterApp(model: AppState, closing: Boolean) {
                 ) {
                     if (model.busy.isNotEmpty() || closing) {
                         CircularProgressIndicator(Modifier.size(13.dp), strokeWidth = 2.dp)
-                        Text(if (closing) "Завершение сессий…" else model.busy, fontSize = 11.sp)
+                        Text(if (closing) tr("Closing sessions…") else model.busy, fontSize = 11.sp)
                     } else {
                         Box(
                             Modifier.size(6.dp)
@@ -260,16 +260,19 @@ fun HunterApp(model: AppState, closing: Boolean) {
                     if (model.busy.isNotEmpty()) {
                         Spacer(Modifier.weight(1f))
                         TextButton(model::cancelOperation, contentPadding = PaddingValues(0.dp)) {
-                            Text("Отмена", fontSize = 11.sp)
+                            Text(tr("Cancel"), fontSize = 11.sp)
                         }
                     }
                     TextButton(
                         { journalVisible = !journalVisible },
                         contentPadding = PaddingValues(horizontal = 8.dp),
                     ) {
-                        Text(if (journalVisible) "Скрыть журнал" else "Журнал", fontSize = 11.sp)
+                        Text(
+                            if (journalVisible) tr("Hide journal") else tr("Journal"),
+                            fontSize = 11.sp,
+                        )
                     }
-                    Text("F1  справка", fontSize = 10.sp, color = Muted)
+                    Text(tr("F1  help"), fontSize = 10.sp, color = Muted)
                 }
             }
         }
@@ -284,10 +287,10 @@ fun HunterApp(model: AppState, closing: Boolean) {
                     model.confirmation = null
                     confirmation.run()
                 }) {
-                    Text("Подтвердить", color = MaterialTheme.colors.error)
+                    Text(tr("Confirm"), color = MaterialTheme.colors.error)
                 }
             },
-            dismissButton = { TextButton({ model.confirmation = null }) { Text("Отмена") } },
+            dismissButton = { TextButton({ model.confirmation = null }) { Text(tr("Cancel")) } },
         )
     }
     if (model.palette) CommandPalette(model) { model.palette = false }
@@ -322,26 +325,26 @@ private fun CommandPalette(model: AppState, dismiss: () -> Unit) {
     val commands =
         Page.entries.map { it.label to { model.page = it } } +
             listOf(
-                "Импорт HAR" to
+                tr("Import HAR") to
                     {
-                        chooseFile(title = "Импорт HAR")?.let(model::importHar)
+                        chooseFile(title = tr("Import HAR"))?.let(model::importHar)
                         Unit
                     },
-                "Обновить устройства" to
+                tr("Refresh devices") to
                     {
-                        model.task("Обновление устройств") { model.refreshDevices(true) }
+                        model.task(tr("Refreshing devices")) { model.refreshDevices(true) }
                     },
-                "Обновить приложения" to model::loadApps,
-                "Проверить утилиты" to model::checkTools,
-                "Начать / остановить захват" to model::toggleCapture,
-                "Начать / остановить Logcat" to model::toggleLogcat,
+                tr("Refresh apps") to model::loadApps,
+                tr("Check tools") to model::checkTools,
+                tr("Start / stop capture") to model::toggleCapture,
+                tr("Start / stop Logcat") to model::toggleLogcat,
             )
     AlertDialog(
         onDismissRequest = dismiss,
-        title = { Text("Команды") },
+        title = { Text(tr("Commands")) },
         text = {
             Column(Modifier.width(520.dp)) {
-                Field(query, { query = it }, "Найти команду…", Modifier.fillMaxWidth())
+                Field(query, { query = it }, tr("Find a command…"), Modifier.fillMaxWidth())
                 LazyColumn(Modifier.heightIn(max = 380.dp)) {
                     items(commands.filter { it.first.contains(query, true) }) { (title, action) ->
                         Text(
@@ -357,7 +360,7 @@ private fun CommandPalette(model: AppState, dismiss: () -> Unit) {
                 }
             }
         },
-        confirmButton = { TextButton(dismiss) { Text("Закрыть") } },
+        confirmButton = { TextButton(dismiss) { Text(tr("Close")) } },
     )
 }
 
@@ -383,7 +386,7 @@ fun AppPicker(model: AppState, modifier: Modifier = Modifier, enabled: Boolean =
             Icon(Icons.Outlined.Android, null, Modifier.size(17.dp), tint = Muted)
             Spacer(Modifier.width(8.dp))
             Text(
-                model.selectedApp?.label ?: "Выберите приложение",
+                model.selectedApp?.label ?: tr("Select an app"),
                 Modifier.weight(1f),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -392,27 +395,25 @@ fun AppPicker(model: AppState, modifier: Modifier = Modifier, enabled: Boolean =
         }
         MiniIcon(
             Icons.Outlined.Refresh,
-            "Загрузить приложения",
+            tr("Load apps"),
             enabled && model.busy.isEmpty() && model.selectedDevice?.state == "device",
             model::loadApps,
         )
     }
     if (open) {
         var query by remember { mutableStateOf("") }
-        var group by remember { mutableStateOf("Все") }
+        var group by remember { mutableStateOf(0) }
         val apps =
-            model.apps.filter {
-                it.matches(query) && (group == "Все" || it.system == (group == "Системные"))
-            }
+            model.apps.filter { it.matches(query) && (group == 0 || it.system == (group == 2)) }
         AlertDialog(
             onDismissRequest = { open = false },
-            title = { Text("Выбор приложения") },
+            title = { Text(tr("Choose an app")) },
             text = {
                 Column(Modifier.width(650.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Field(
                         query,
                         { query = it },
-                        "Название, пакет, UID или App ID",
+                        tr("Name, package, UID or App ID"),
                         Modifier.fillMaxWidth(),
                     )
                     Row(
@@ -421,16 +422,16 @@ fun AppPicker(model: AppState, modifier: Modifier = Modifier, enabled: Boolean =
                     ) {
                         Choice(
                             group,
-                            listOf("Все", "Сторонние", "Системные"),
-                            { it },
+                            listOf(0, 1, 2),
+                            { listOf(tr("All"), tr("User apps"), tr("System apps"))[it] },
                             { group = it },
                             Modifier.width(180.dp),
                         )
-                        Text("${apps.size} приложений", color = Muted)
+                        Text(tr("{0} apps", apps.size), color = Muted)
                     }
                     if (model.apps.isEmpty())
                         Text(
-                            "Загрузите приложения выбранного устройства.",
+                            tr("Load apps for the selected device."),
                             color = Muted,
                             modifier = Modifier.padding(20.dp),
                         )
@@ -468,17 +469,27 @@ fun AppPicker(model: AppState, modifier: Modifier = Modifier, enabled: Boolean =
                     }
                 }
             },
-            confirmButton = { TextButton({ open = false }) { Text("Закрыть") } },
+            confirmButton = { TextButton({ open = false }) { Text(tr("Close")) } },
             dismissButton = {
                 TextButton(
                     model::loadApps,
                     enabled = model.busy.isEmpty() && model.selectedDevice?.state == "device",
                 ) {
-                    Text("Обновить")
+                    Text(tr("Refresh"))
                 }
             },
         )
     }
+}
+
+private enum class TrafficSort(private val labelKey: String) {
+    Newest("Time ↓"),
+    Oldest("Time ↑"),
+    Status("Status"),
+    Duration("Duration");
+
+    val label
+        get() = tr(labelKey)
 }
 
 @Composable
@@ -488,7 +499,7 @@ fun TrafficScreen(model: AppState) {
     var identity by remember { mutableStateOf("") }
     var selectedId by remember { mutableStateOf<String?>(null) }
     var setup by remember { mutableStateOf(false) }
-    var sort by remember { mutableStateOf("Время ↓") }
+    var sort by remember { mutableStateOf(TrafficSort.Newest) }
     val snapshot = model.exchanges.toList()
     val visible by
         produceState(emptyList<Exchange>(), snapshot, query, pkg, identity, sort) {
@@ -498,9 +509,10 @@ fun TrafficScreen(model: AppState) {
                         .filter { it.matches(query, pkg, identity) }
                         .let { entries ->
                             when (sort) {
-                                "Время ↑" -> entries.sortedBy { it.instant }
-                                "Статус" -> entries.sortedByDescending { it.status ?: 0 }
-                                "Длительность" -> entries.sortedByDescending { it.duration ?: 0.0 }
+                                TrafficSort.Oldest -> entries.sortedBy { it.instant }
+                                TrafficSort.Status -> entries.sortedByDescending { it.status ?: 0 }
+                                TrafficSort.Duration ->
+                                    entries.sortedByDescending { it.duration ?: 0.0 }
                                 else -> entries.sortedByDescending { it.instant }
                             }
                         }
@@ -516,7 +528,7 @@ fun TrafficScreen(model: AppState) {
             try {
                 copyText(model, Curl.create(selected))
             } catch (e: Exception) {
-                model.error = e.message ?: "cURL недоступен"
+                model.error = e.message ?: tr("cURL unavailable")
             }
     }
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -536,14 +548,14 @@ fun TrafficScreen(model: AppState) {
                     )
                     AppPicker(model, Modifier.weight(1f), enabled && !model.capturing)
                     Action(
-                        if (model.capturing) "Остановить" else "Начать захват",
+                        if (model.capturing) tr("Stop") else tr("Start capture"),
                         if (model.capturing) Icons.Outlined.Stop else Icons.Outlined.PlayArrow,
                         enabled && (model.capturing || model.selectedDevice?.state == "device"),
                         primary = true,
                         danger = model.capturing,
                         onClick = model::toggleCapture,
                     )
-                    MiniIcon(Icons.Outlined.Tune, "Настроить захват") { setup = true }
+                    MiniIcon(Icons.Outlined.Tune, tr("Configure capture")) { setup = true }
                 }
                 Text(model.mode.hint, color = Muted, fontSize = 11.sp)
             }
@@ -555,12 +567,12 @@ fun TrafficScreen(model: AppState) {
             Field(
                 query,
                 { query = it },
-                "Поиск по URL, заголовкам, методу, статусу…",
+                tr("Search URL, headers, method, status…"),
                 Modifier.weight(1f),
             )
-            Field(pkg, { pkg = it }, "Приложение / пакет", Modifier.width(175.dp))
+            Field(pkg, { pkg = it }, tr("App / package"), Modifier.width(175.dp))
             Field(identity, { identity = it }, "UID / App ID", Modifier.width(115.dp))
-            MiniIcon(Icons.Outlined.FilterAltOff, "Сбросить фильтры") {
+            MiniIcon(Icons.Outlined.FilterAltOff, tr("Reset filters")) {
                 query = ""
                 pkg = ""
                 identity = ""
@@ -571,27 +583,21 @@ fun TrafficScreen(model: AppState) {
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Text(
-                "${visible.size} / ${snapshot.size} запросов",
+                tr("{0} / {1} requests", visible.size, snapshot.size),
                 fontSize = 12.sp,
                 color = Muted,
                 modifier = Modifier.weight(1f),
             )
-            Choice(
-                sort,
-                listOf("Время ↓", "Время ↑", "Статус", "Длительность"),
-                { it },
-                { sort = it },
-                Modifier.width(145.dp),
-            )
-            Action("Импорт HAR", Icons.Outlined.FileOpen, enabled) {
-                chooseFile(title = "Импорт HAR")?.let(model::importHar)
+            Choice(sort, TrafficSort.entries, { it.label }, { sort = it }, Modifier.width(145.dp))
+            Action(tr("Import HAR"), Icons.Outlined.FileOpen, enabled) {
+                chooseFile(title = tr("Import HAR"))?.let(model::importHar)
             }
-            Action("Экспорт HAR", Icons.Outlined.FileDownload, enabled && visible.isNotEmpty()) {
+            Action(tr("Export HAR"), Icons.Outlined.FileDownload, enabled && visible.isNotEmpty()) {
                 chooseFile(true, "traffic.har", extension = "har")?.let {
                     model.saveHar(it, visible.toList())
                 }
             }
-            MiniIcon(Icons.Outlined.DeleteOutline, "Очистить список", enabled) {
+            MiniIcon(Icons.Outlined.DeleteOutline, tr("Clear list"), enabled) {
                 model.clearTraffic()
                 selectedId = null
             }
@@ -607,26 +613,27 @@ fun TrafficScreen(model: AppState) {
                         .background(MaterialTheme.colors.onSurface.copy(alpha = .025f))
                         .padding(horizontal = 12.dp, vertical = 12.dp)
                 ) {
-                    TableCell("ВРЕМЯ", 105)
-                    TableCell("МЕТОД", 65)
-                    TableCell("СТАТУС", 65)
-                    Text("ХОСТ / ПУТЬ", Modifier.weight(1f), fontSize = 10.sp, color = Muted)
-                    TableCell("ПРИЛОЖЕНИЕ", 150)
-                    TableCell("ВРЕМЯ, МС", 85)
+                    TableCell(tr("TIME"), 105)
+                    TableCell(tr("METHOD"), 65)
+                    TableCell(tr("STATUS"), 65)
+                    Text(tr("HOST / PATH"), Modifier.weight(1f), fontSize = 10.sp, color = Muted)
+                    TableCell(tr("APP"), 150)
+                    TableCell(tr("TIME, MS"), 85)
                 }
                 Divider(color = Line)
                 if (visible.isEmpty())
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         EmptyState(
                             Icons.Outlined.SwapVert,
-                            if (snapshot.isEmpty()) "Трафик появится здесь" else "Нет совпадений",
+                            if (snapshot.isEmpty()) tr("Traffic will appear here")
+                            else tr("No matches"),
                             if (snapshot.isEmpty())
-                                "Начните захват с Android или откройте HAR-файл."
-                            else "Измените поиск или сбросьте фильтры.",
+                                tr("Start capture from Android or open a HAR file.")
+                            else tr("Change the search or reset filters."),
                         ) {
                             if (snapshot.isEmpty())
-                                Action("Импортировать HAR", Icons.Outlined.FileOpen) {
-                                    chooseFile(title = "Импорт HAR")?.let(model::importHar)
+                                Action(tr("Open HAR"), Icons.Outlined.FileOpen) {
+                                    chooseFile(title = tr("Import HAR"))?.let(model::importHar)
                                 }
                         }
                     }
@@ -709,7 +716,7 @@ fun TrafficScreen(model: AppState) {
                                     Column(Modifier.width(150.dp)) {
                                         Text(
                                             e.appName.ifBlank {
-                                                e.packageName.ifBlank { "Неизвестно" }
+                                                e.packageName.ifBlank { tr("Unknown") }
                                             },
                                             fontSize = 11.sp,
                                             color = Muted,
@@ -745,18 +752,18 @@ fun TrafficScreen(model: AppState) {
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Action("Детали", Icons.AutoMirrored.Outlined.OpenInNew, selected != null) {
+            Action(tr("Details"), Icons.AutoMirrored.Outlined.OpenInNew, selected != null) {
                 selected?.let(::openDetails)
             }
-            Action("Копировать cURL", Icons.Outlined.Code, selected != null && !selected.raw) {
+            Action(tr("Copy cURL"), Icons.Outlined.Code, selected != null && !selected.raw) {
                 copyCurl()
             }
-            Action("Копировать URL", Icons.Outlined.Link, selected != null) {
+            Action(tr("Copy URL"), Icons.Outlined.Link, selected != null) {
                 selected?.let { copyText(model, it.url) }
             }
             Spacer(Modifier.weight(1f))
             if (model.evictedRequests > 0)
-                Text("Вытеснено: ${model.evictedRequests}", color = Amber, fontSize = 11.sp)
+                Text(tr("Evicted: {0}", model.evictedRequests), color = Amber, fontSize = 11.sp)
             if (model.capturing) Pill("● LIVE")
         }
     }
@@ -773,16 +780,16 @@ fun CaptureSetup(model: AppState, dismiss: () -> Unit) {
     val enabled = model.busy.isEmpty() && !model.capturing
     AlertDialog(
         onDismissRequest = dismiss,
-        title = { Text("Подготовка захвата") },
+        title = { Text(tr("Capture setup")) },
         text = {
             Column(
                 Modifier.width(720.dp).heightIn(max = 580.dp).verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                Text("1. Устройство и приложение", fontWeight = FontWeight.SemiBold)
+                Text(tr("1. Device and app"), fontWeight = FontWeight.SemiBold)
                 Text(
                     model.selectedDevice?.label
-                        ?: "Подключите телефон по USB, разрешите отладку и выберите устройство.",
+                        ?: tr("Connect a phone over USB, allow debugging and select the device."),
                     color = Muted,
                 )
                 AppPicker(model, Modifier.fillMaxWidth(), enabled)
@@ -799,34 +806,39 @@ fun CaptureSetup(model: AppState, dismiss: () -> Unit) {
                 if (model.mode == CaptureMode.OkHttp || model.mode == CaptureMode.Native) {
                     Text("2. Frida", fontWeight = FontWeight.SemiBold)
                     Check(
-                        "Без root: debuggable + run-as + Gadget",
+                        tr("Rootless: debuggable + run-as + Gadget"),
                         model.settings.gadget,
                         enabled,
                     ) {
                         model.updateSettings(model.settings.copy(gadget = it))
                     }
-                    Check("Запустить приложение при старте", model.settings.spawn, enabled) {
+                    Check(tr("Launch app at startup"), model.settings.spawn, enabled) {
                         model.updateSettings(model.settings.copy(spawn = it))
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Action("Установить сервер", enabled = enabled) { model.installFrida() }
-                        Action("Запустить сервер", enabled = enabled, onClick = model::startFrida)
+                        Action(tr("Install server"), enabled = enabled) { model.installFrida() }
+                        Action(tr("Start server"), enabled = enabled, onClick = model::startFrida)
                     }
                     Text(
-                        "Frida клиент/сервер/Gadget: ${Adb.FRIDA_VERSION}. Для сервера нужен root. Gadget работает только с debuggable-приложением.",
+                        tr(
+                            "Frida client/server/Gadget: {0}. The server requires root. Gadget only works with debuggable apps.",
+                            Adb.FRIDA_VERSION,
+                        ),
                         color = Muted,
                         fontSize = 11.sp,
                     )
                 } else {
-                    Text("2. HTTPS / сертификат", fontWeight = FontWeight.SemiBold)
+                    Text(tr("2. HTTPS / certificate"), fontWeight = FontWeight.SemiBold)
                     Text(
-                        "Подготовьте CA, передайте его на Android и вручную установите как «Сертификат CA». Приложение должно доверять пользовательским CA.",
+                        tr(
+                            "Prepare the CA, send it to Android and install it manually as a CA certificate. The app must trust user CAs."
+                        ),
                         color = Muted,
                     )
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Action("Подготовить CA", enabled = enabled) { model.prepareCapture(false) }
+                        Action(tr("Prepare CA"), enabled = enabled) { model.prepareCapture(false) }
                         Action(
-                            "Передать CA",
+                            tr("Send CA"),
                             enabled = model.busy.isEmpty(),
                             onClick = model::sendCa,
                         )
@@ -837,30 +849,32 @@ fun CaptureSetup(model: AppState, dismiss: () -> Unit) {
                             Field(
                                 model.settings.vpnHost,
                                 { model.updateSettings(model.settings.copy(vpnHost = it)) },
-                                "IP / DNS компьютера",
+                                tr("Computer IP / DNS"),
                                 Modifier.weight(1f),
                                 enabled,
                             )
                             Field(
                                 model.settings.vpnPort,
                                 { model.updateSettings(model.settings.copy(vpnPort = it)) },
-                                "UDP-порт",
+                                tr("UDP port"),
                                 Modifier.width(130.dp),
                                 enabled,
                             )
                         }
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Action("Подготовить профиль", enabled = enabled) {
+                            Action(tr("Prepare profile"), enabled = enabled) {
                                 model.prepareCapture(true)
                             }
                             Action(
-                                "Передать в WireGuard",
+                                tr("Send to WireGuard"),
                                 enabled = model.busy.isEmpty(),
                                 onClick = model::sendVpn,
                             )
                         }
                         Text(
-                            "Откройте UDP-порт в брандмауэре. В WireGuard: + → Импорт из файла → Download/ddh.conf. Включите туннель после запуска сервера. Для автоматической остановки разрешите Remote control.",
+                            tr(
+                                "Allow the UDP port in your firewall. WireGuard: + → Import from file → Download/ddh.conf. Enable the tunnel after starting the server. Allow Remote control for automatic shutdown."
+                            ),
                             color = Muted,
                             fontSize = 11.sp,
                         )
@@ -869,11 +883,11 @@ fun CaptureSetup(model: AppState, dismiss: () -> Unit) {
                 Divider(color = Line)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Action(
-                        "Проверить готовность",
+                        tr("Check readiness"),
                         enabled = model.busy.isEmpty(),
                         onClick = model::checkCapture,
                     )
-                    Action("Руководство") {
+                    Action(tr("User guide")) {
                         model.page = Page.Help
                         dismiss()
                     }
@@ -918,9 +932,9 @@ fun CaptureSetup(model: AppState, dismiss: () -> Unit) {
                     model.busy.isEmpty() &&
                         (model.capturing || model.selectedDevice?.state == "device"),
             ) {
-                Text(if (model.capturing) "Остановить" else "Начать захват")
+                Text(if (model.capturing) tr("Stop") else tr("Start capture"))
             }
         },
-        dismissButton = { TextButton(dismiss) { Text("Закрыть") } },
+        dismissButton = { TextButton(dismiss) { Text(tr("Close")) } },
     )
 }

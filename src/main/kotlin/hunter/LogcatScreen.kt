@@ -41,7 +41,7 @@ fun LogcatScreen(model: AppState) {
                     try {
                         snapshot.filter(filter.predicate()) to ""
                     } catch (e: Exception) {
-                        emptyList<LogEntry>() to (e.message ?: "Некорректный фильтр")
+                        emptyList<LogEntry>() to (e.message ?: tr("Invalid filter"))
                     }
                 }
         }
@@ -59,7 +59,15 @@ fun LogcatScreen(model: AppState) {
             OutputWindow(
                 title = "${entry.level} · ${entry.tag}",
                 text =
-                    "Устройство: ${entry.serial} · буфер ${entry.buffer}\nPID ${entry.pid} · TID ${entry.tid} · UID ${entry.uid}\n\n${entry.raw}",
+                    tr(
+                        "Device: {0} · buffer {1}\nPID {2} · TID {3} · UID {4}\n\n{5}",
+                        entry.serial,
+                        entry.buffer,
+                        entry.pid,
+                        entry.tid,
+                        entry.uid,
+                        entry.raw,
+                    ),
             )
     }
     Column(
@@ -91,12 +99,12 @@ fun LogcatScreen(model: AppState) {
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    Check("Приложение (UID)", model.logOptions.appOnly, enabled && !model.logging) {
+                    Check(tr("App (UID)"), model.logOptions.appOnly, enabled && !model.logging) {
                         model.logOptions = model.logOptions.copy(appOnly = it)
                     }
                     AppPicker(model, Modifier.weight(1f), enabled && !model.logging)
                     Action(
-                        if (model.logging) "Остановить" else "Начать запись",
+                        if (model.logging) tr("Stop") else tr("Start recording"),
                         if (model.logging) Icons.Outlined.Stop else Icons.Outlined.PlayArrow,
                         enabled && (model.logging || model.selectedDevice?.state == "device"),
                         primary = true,
@@ -108,7 +116,7 @@ fun LogcatScreen(model: AppState) {
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    Text("Буферы", fontSize = 11.sp, color = Muted)
+                    Text(tr("Buffers"), fontSize = 11.sp, color = Muted)
                     Choice(
                         model.logOptions.buffer,
                         listOf(
@@ -125,17 +133,17 @@ fun LogcatScreen(model: AppState) {
                         Modifier.width(210.dp),
                         enabled && !model.logging,
                     )
-                    Text("История", fontSize = 11.sp, color = Muted)
+                    Text(tr("History"), fontSize = 11.sp, color = Muted)
                     Choice(
                         model.logOptions.history,
                         listOf(100, 500, 2000, 5000),
-                        { "$it строк" },
+                        { tr("{0} rows", it) },
                         { model.logOptions = model.logOptions.copy(history = it) },
                         Modifier.width(120.dp),
                         enabled && !model.logging,
                     )
                     Spacer(Modifier.weight(1f))
-                    Check("Автопрокрутка", autoScroll) { autoScroll = it }
+                    Check(tr("Auto-scroll"), autoScroll) { autoScroll = it }
                 }
             }
         }
@@ -146,7 +154,7 @@ fun LogcatScreen(model: AppState) {
             Field(
                 filter.query,
                 { filter = filter.copy(query = it) },
-                "Поиск в журнале",
+                tr("Search logs"),
                 Modifier.weight(1f),
             )
             Check("Regex", filter.regex) { filter = filter.copy(regex = it) }
@@ -157,9 +165,9 @@ fun LogcatScreen(model: AppState) {
                 { filter = filter.copy(level = it) },
                 Modifier.width(65.dp),
             )
-            Action("Ошибки+", Icons.Outlined.ErrorOutline) { filter = filter.copy(level = "E") }
-            MiniIcon(Icons.Outlined.Tune, "Дополнительные фильтры") { advanced = !advanced }
-            MiniIcon(Icons.Outlined.FilterAltOff, "Сбросить фильтры") { filter = LogFilter() }
+            Action(tr("Errors+"), Icons.Outlined.ErrorOutline) { filter = filter.copy(level = "E") }
+            MiniIcon(Icons.Outlined.Tune, tr("Advanced filters")) { advanced = !advanced }
+            MiniIcon(Icons.Outlined.FilterAltOff, tr("Reset filters")) { filter = LogFilter() }
         }
         if (advanced)
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -170,16 +178,16 @@ fun LogcatScreen(model: AppState) {
                     Field(
                         filter.tag,
                         { filter = filter.copy(tag = it) },
-                        "Tag: через запятую",
+                        tr("Tags: comma-separated"),
                         Modifier.weight(1f),
                     )
                     Field(
                         filter.excludeTag,
                         { filter = filter.copy(excludeTag = it) },
-                        "Исключить tag",
+                        tr("Exclude tags"),
                         Modifier.weight(1f),
                     )
-                    Check("Точный tag", filter.exact) { filter = filter.copy(exact = it) }
+                    Check(tr("Exact tag"), filter.exact) { filter = filter.copy(exact = it) }
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Field(
@@ -204,7 +212,7 @@ fun LogcatScreen(model: AppState) {
             }
         if (filtered.second.isNotEmpty())
             Text(
-                "Фильтр: ${filtered.second}",
+                tr("Filter: {0}", filtered.second),
                 color = MaterialTheme.colors.error,
                 fontSize = 11.sp,
                 maxLines = 2,
@@ -216,21 +224,21 @@ fun LogcatScreen(model: AppState) {
         ) {
             Column {
                 Row(Modifier.fillMaxWidth().padding(10.dp)) {
-                    Text("ВРЕМЯ", Modifier.width(155.dp), fontSize = 10.sp, color = Muted)
+                    Text(tr("TIME"), Modifier.width(155.dp), fontSize = 10.sp, color = Muted)
                     Text("LVL", Modifier.width(35.dp), fontSize = 10.sp, color = Muted)
                     Text("PID / TID", Modifier.width(95.dp), fontSize = 10.sp, color = Muted)
                     Text("TAG", Modifier.width(150.dp), fontSize = 10.sp, color = Muted)
-                    Text("СООБЩЕНИЕ", fontSize = 10.sp, color = Muted)
+                    Text(tr("MESSAGE"), fontSize = 10.sp, color = Muted)
                 }
                 Divider(color = Line)
                 if (visible.isEmpty())
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         EmptyState(
                             Icons.Outlined.Terminal,
-                            if (snapshot.isEmpty()) "Журнал пока пуст" else "Нет совпадений",
+                            if (snapshot.isEmpty()) tr("No logs yet") else tr("No matches"),
                             if (snapshot.isEmpty())
-                                "Запустите запись системы или выбранного приложения."
-                            else "Измените фильтры; исходные строки остаются в памяти.",
+                                tr("Start recording the system or selected app.")
+                            else tr("Change filters; original rows remain in memory."),
                         )
                     }
                 else
@@ -240,14 +248,14 @@ fun LogcatScreen(model: AppState) {
                                 ContextMenuArea(
                                     items = {
                                         listOf(
-                                            ContextMenuItem("Копировать строку") {
+                                            ContextMenuItem(tr("Copy row")) {
                                                 copyText(model, entry.raw)
                                             },
-                                            ContextMenuItem("Полная строка") { open(entry) },
-                                            ContextMenuItem("Только этот tag") {
+                                            ContextMenuItem(tr("Full row")) { open(entry) },
+                                            ContextMenuItem(tr("Only this tag")) {
                                                 filter = filter.copy(tag = entry.tag, exact = true)
                                             },
-                                            ContextMenuItem("Исключить tag") {
+                                            ContextMenuItem(tr("Exclude tags")) {
                                                 filter =
                                                     filter.copy(
                                                         excludeTag =
@@ -360,25 +368,23 @@ fun LogcatScreen(model: AppState) {
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Action("Копировать", Icons.Outlined.ContentCopy, selected.isNotEmpty()) {
-                copySelected()
-            }
-            Action("Экспорт", Icons.Outlined.FileDownload, snapshot.isNotEmpty()) {
+            Action(tr("Copy"), Icons.Outlined.ContentCopy, selected.isNotEmpty()) { copySelected() }
+            Action(tr("Export"), Icons.Outlined.FileDownload, snapshot.isNotEmpty()) {
                 export = snapshot.toList()
             }
-            MiniIcon(Icons.Outlined.DeleteOutline, "Очистить окно") {
+            MiniIcon(Icons.Outlined.DeleteOutline, tr("Clear window")) {
                 model.clearLogs()
                 selected = emptySet()
             }
             Spacer(Modifier.weight(1f))
             Text(
-                "${visible.size} / ${snapshot.size} · получено ${model.receivedLogs}",
+                tr("{0} / {1} · received {2}", visible.size, snapshot.size, model.receivedLogs),
                 fontSize = 10.sp,
                 color = Muted,
             )
             if (model.evictedLogs > 0 || model.droppedLogs > 0)
                 Text(
-                    "Вытеснено ${model.evictedLogs} · пропущено ${model.droppedLogs}",
+                    tr("Evicted {0} · dropped {1}", model.evictedLogs, model.droppedLogs),
                     fontSize = 10.sp,
                     color = Amber,
                 )
@@ -394,7 +400,7 @@ fun LogcatScreen(model: AppState) {
             }
         AlertDialog(
             onDismissRequest = { export = null },
-            title = { Text("Экспорт Logcat") },
+            title = { Text(tr("Export Logcat")) },
             text = {
                 Column(Modifier.width(440.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Choice(
@@ -404,14 +410,16 @@ fun LogcatScreen(model: AppState) {
                         { format = it },
                         Modifier.fillMaxWidth(),
                     )
-                    Check("Все сохранённые строки (${frozen.size})", all) { all = it }
+                    Check(tr("All stored rows ({0})", frozen.size), all) { all = it }
                     Text(
-                        if (all) "Экспорт всех строк снимка."
-                        else "Видимые по фильтру: ${frozenVisible.size} строк.",
+                        if (all) tr("Export all rows in the snapshot.")
+                        else tr("Visible after filtering: {0} rows.", frozenVisible.size),
                         color = Muted,
                     )
                     Text(
-                        "Запись может продолжаться. Экспорт использует снимок на момент открытия этого окна.",
+                        tr(
+                            "Recording can continue. Export uses a snapshot taken when this window opened."
+                        ),
                         fontSize = 11.sp,
                         color = Muted,
                     )
@@ -423,7 +431,7 @@ fun LogcatScreen(model: AppState) {
                     export = null
                     chooseFile(true, "logcat.${format.lowercase()}", extension = format.lowercase())
                         ?.let { file ->
-                            model.task("Экспорт Logcat") {
+                            model.task(tr("Export Logcat")) {
                                 val result =
                                     withContext(Dispatchers.Default) {
                                         LogExport.write(entries, format)
@@ -431,14 +439,14 @@ fun LogcatScreen(model: AppState) {
                                 withContext(Dispatchers.IO) {
                                     AppFiles.atomicWrite(file, result.toByteArray(Charsets.UTF_8))
                                 }
-                                model.status = "Экспортировано ${entries.size} строк"
+                                model.status = tr("Exported {0} rows", entries.size)
                             }
                         }
                 }) {
-                    Text("Сохранить")
+                    Text(tr("Save"))
                 }
             },
-            dismissButton = { TextButton({ export = null }) { Text("Отмена") } },
+            dismissButton = { TextButton({ export = null }) { Text(tr("Cancel")) } },
         )
     }
 }

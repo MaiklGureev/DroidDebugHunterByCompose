@@ -12,7 +12,7 @@ HAR analysis works immediately. Try [the synthetic sample](https://github.com/Ma
 
 For a phone, open Settings → Tools (`Настройки → Инструменты`) and configure ADB, Python 3.14 and the tools directory. Preparation downloads optional components only when requested. Public archives do not include a separate Python interpreter, ADB, Frida servers or WireGuard APK.
 
-Confirm USB debugging, CA installation/trust and VPN permission on Android. Open capture settings beside Start on Traffic (`Трафик`) and follow the offline Help. English and Russian manuals are included in `runtime/help` inside app resources and extracted into the user data directory. The desktop UI currently uses Russian labels.
+Confirm USB debugging, CA installation/trust and VPN permission on Android. Open capture settings beside Start on Traffic (`Трафик`) and follow the offline Help. English and Russian manuals are included in `runtime/help` inside app resources and extracted into the user data directory. Switch English/Russian in Settings → Interface language (Настройки → Язык интерфейса). It applies immediately and is saved automatically; offline Help follows the selected language.
 
 [Releases and SHA-256](https://github.com/MaiklGureev/DroidDebugHunterByCompose/releases).
 

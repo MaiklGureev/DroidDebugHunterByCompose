@@ -86,6 +86,7 @@ data class Body(
             "Base64" -> Base64.getEncoder().encodeToString(bytes)
             "JSON",
             "Auto" -> runCatching { json.toJson(JsonParser.parseString(text)) }.getOrDefault(text)
+            "HTML text",
             "HTML-текст" ->
                 text
                     .replace(Regex("(?is)<(script|style)\\b.*?</\\1>"), "")
@@ -172,12 +173,12 @@ enum class CurlShell(val title: String) {
 
 object Curl {
     fun quote(value: String): String {
-        require('\u0000' !in value) { "Аргумент содержит NUL" }
+        require('\u0000' !in value) { tr("Argument contains NUL") }
         return "'${value.replace("'", "''")}'"
     }
 
     fun quotePosix(value: String): String {
-        require('\u0000' !in value) { "Аргумент содержит NUL" }
+        require('\u0000' !in value) { tr("Argument contains NUL") }
         return "'${value.replace("'", "'\\''")}'"
     }
 
@@ -186,11 +187,11 @@ object Curl {
             !e.raw &&
                 runCatching { URI(e.url).scheme in listOf("http", "https") }.getOrDefault(false)
         ) {
-            "cURL доступен только для HTTP(S)-запросов"
+            tr("cURL is available only for HTTP(S) requests")
         }
-        require(e.method.matches(Regex("[A-Za-z-]+"))) { "Некорректный HTTP-метод" }
+        require(e.method.matches(Regex("[A-Za-z-]+"))) { tr("Invalid HTTP method") }
         require(e.request.complete) {
-            "Тело запроса захвачено частично: точное повторение недоступно"
+            tr("The request body was partially captured: exact replay is unavailable")
         }
         val quoteArg = if (shell == CurlShell.PowerShell) ::quote else ::quotePosix
         val args =
@@ -205,7 +206,7 @@ object Curl {
         for (h in e.requestHeaders) {
             if (h.name.startsWith(":")) continue
             require(h.name.none { it in "\r\n\u0000:" } && h.value.none { it in "\r\n\u0000" }) {
-                "Некорректный заголовок"
+                tr("Invalid header")
             }
             if (h.name.lowercase() in listOf("content-length", "transfer-encoding", "connection"))
                 continue
@@ -238,16 +239,16 @@ object Har {
     fun read(text: String): List<Exchange> {
         val root = parseObject(text)
         require(root.obj("log").get("entries")?.isJsonArray == true) {
-            "Ожидается HAR с массивом log.entries"
+            tr("Expected HAR with a log.entries array")
         }
         val entries = root.obj("log").array("entries")
-        require(entries.size() <= MAX_ENTRIES) { "Лимит HAR: 20 000 запросов" }
+        require(entries.size() <= MAX_ENTRIES) { tr("HAR limit: 20,000 requests") }
         return entries.map { element ->
             val e = element.asJsonObject
             require(
                 e.get("request")?.isJsonObject == true && e.get("response")?.isJsonObject == true
             ) {
-                "В записи HAR нет request/response"
+                tr("HAR entry has no request/response")
             }
             val req = e.obj("request")
             val res = e.obj("response")
@@ -451,7 +452,7 @@ data class LogFilter(
     val uid: String = "",
 ) {
     fun predicate(): (LogEntry) -> Boolean {
-        require(query.length <= 512) { "Шаблон поиска длиннее 512 символов" }
+        require(query.length <= 512) { tr("Search pattern exceeds 512 characters") }
         val re =
             if (regex && query.isNotEmpty())
                 com.google.re2j.Pattern.compile(query, com.google.re2j.Pattern.CASE_INSENSITIVE)
@@ -459,7 +460,7 @@ data class LogFilter(
         fun ids(input: String): Set<String> {
             val parts = input.split(',', ';').map { it.trim() }.filter { it.isNotEmpty() }
             require(parts.all { it.toLongOrNull()?.let { n -> n >= 0 } == true }) {
-                "PID / TID / UID должны быть числами через запятую"
+                tr("PID / TID / UID must be comma-separated numbers")
             }
             return parts.toSet()
         }

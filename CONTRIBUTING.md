@@ -19,3 +19,5 @@ When adding agents/help files, run `python scripts/update_runtime_manifest.py`. 
 English is the default repository language. Keep each English document and its Russian counterpart aligned and link them near the top. Embedded help retains Russian filenames used by the UI and provides `.en.md` counterparts. Update the documentation index and runtime manifest when adding help.
 
 In a PR, describe the problem, resulting behavior, validation and limitations. Contributions to the project's own code are under the [MIT License](LICENSE). Preserve third-party licenses and notices.
+
+Interface text uses English message keys in `tr(...)` and matching `src/main/resources/i18n/en.json` / `ru.json` catalogs. Keep numeric argument placeholders identical in both languages. Use stable IDs/enums for selections, not translated labels. Never translate captured payloads, raw logs or user-entered text.

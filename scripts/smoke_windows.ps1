@@ -25,8 +25,10 @@ try {
     $expected = [IO.Path]::GetFullPath((Join-Path $root 'runtime'))
     if (!$javaHome.Equals($expected, [StringComparison]::OrdinalIgnoreCase)) { throw 'Launcher used a runtime outside the application folder' }
     if ($runtime.deviceSelection -ne $true -or $runtime.shutdown -ne $true) { throw 'Application selection/shutdown check did not pass' }
+    if ($runtime.languagePersistence -ne $true) { throw 'Interface language persistence check did not pass' }
     Write-Output ('PASS: Java ' + $runtime.javaVersion + ' from bundled runtime; system Java paths disabled.')
     Write-Output 'PASS: packaged application selects a device and shuts down on the Swing dispatcher.'
+    Write-Output 'PASS: English/Russian interface switching persists across application instances.'
 } finally {
     $env:PATH = $previousPath
     $env:JAVA_HOME = $previousJava

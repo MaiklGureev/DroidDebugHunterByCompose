@@ -22,4 +22,4 @@
 | Third-party components | [Notices](../THIRD_PARTY_NOTICES.md) | [Уведомления](../THIRD_PARTY_NOTICES.ru.md) |
 | Native resources | [Layout](../desktop-resources/README.md) | [Каталоги](../desktop-resources/README.ru.md) |
 
-Project-owned code and documentation are under the [MIT License](../LICENSE). Third-party terms are retained. Repository documentation defaults to English; embedded help keeps Russian filenames used by the UI and provides English `.en.md` counterparts. Both are available offline through the Help folder. The desktop interface is currently in Russian.
+Project-owned code and documentation are under the [MIT License](../LICENSE). Third-party terms are retained. Repository documentation defaults to English; embedded help keeps Russian filenames used by the UI and provides English `.en.md` counterparts. Both are available offline through the Help folder. The interface supports English/Russian with immediate switching in Settings → Interface language and automatic persistence. Offline Help follows this setting.

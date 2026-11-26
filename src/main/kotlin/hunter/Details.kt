@@ -48,17 +48,15 @@ fun OutputContent(model: AppState, output: OutputWindow) {
                     fontSize = 20.sp,
                     fontWeight = FontWeight.SemiBold,
                 )
-                Action("Копировать всё", Icons.Outlined.ContentCopy) {
-                    copyText(model, output.text)
-                }
-                Action("Сохранить TXT", Icons.Outlined.Save, model.busy.isEmpty()) {
+                Action(tr("Copy all"), Icons.Outlined.ContentCopy) { copyText(model, output.text) }
+                Action(tr("Save TXT"), Icons.Outlined.Save, model.busy.isEmpty()) {
                     chooseFile(true, "adb-result.txt", extension = "txt")?.let {
                         model.saveText(it, output.text)
                     }
                 }
             }
             MonoText(output.text, Modifier.weight(1f).fillMaxWidth())
-            Text("UTF-8 · Esc — закрыть окно", color = Muted, fontSize = 11.sp)
+            Text(tr("UTF-8 · Esc — close window"), color = Muted, fontSize = 11.sp)
         }
     }
 }
@@ -91,7 +89,8 @@ fun ExchangeContent(model: AppState, exchange: Exchange) {
                     if (exchange.error.isNotBlank() || (exchange.status ?: 0) >= 400) Red else Green,
                 )
                 Text(
-                    exchange.duration?.let { "%.1f мс".format(it) } ?: "Ожидание ответа",
+                    exchange.duration?.let { tr("%.1f ms").format(it) }
+                        ?: tr("Waiting for response"),
                     color = Muted,
                     fontSize = 12.sp,
                 )
@@ -105,15 +104,26 @@ fun ExchangeContent(model: AppState, exchange: Exchange) {
                 Text(exchange.url, fontSize = 17.sp, fontWeight = FontWeight.Medium, maxLines = 3)
             }
             Text(
-                "${exchange.source} · ${exchange.version} · ${exchange.time}\n${exchange.appName.ifBlank {exchange.packageName.ifBlank {"Источник приложения неизвестен"}}} · UID ${exchange.uid.ifBlank {"?"}} · App ID ${exchange.appId.ifBlank {"?"}} · устройство ${exchange.serial.ifBlank {"HAR"}}",
+                tr(
+                    "{0} · {1} · {2}\n{3} · UID {4} · App ID {5} · device {6}",
+                    exchange.source,
+                    exchange.version,
+                    exchange.time,
+                    exchange.appName.ifBlank {
+                        exchange.packageName.ifBlank { tr("App source unknown") }
+                    },
+                    exchange.uid.ifBlank { "?" },
+                    exchange.appId.ifBlank { "?" },
+                    exchange.serial.ifBlank { "HAR" },
+                ),
                 fontSize = 11.sp,
                 color = Muted,
             )
             if (exchange.error.isNotBlank())
                 Text(exchange.error, color = MaterialTheme.colors.error)
             val tabs =
-                listOf("Запрос", "Ответ", "cURL") +
-                    if (exchange.diagnostic.isNotBlank()) listOf("Диагностика") else emptyList()
+                listOf(tr("Request"), tr("Response"), "cURL") +
+                    if (exchange.diagnostic.isNotBlank()) listOf(tr("Diagnostics")) else emptyList()
             TabRow(
                 tab.coerceAtMost(tabs.lastIndex),
                 backgroundColor = MaterialTheme.colors.surface,
@@ -140,12 +150,12 @@ fun ExchangeContent(model: AppState, exchange: Exchange) {
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(
-                                    "ЗАГОЛОВКИ · ${headers.size}",
+                                    tr("HEADERS · {0}", headers.size),
                                     fontSize = 11.sp,
                                     color = Muted,
                                     modifier = Modifier.weight(1f),
                                 )
-                                MiniIcon(Icons.Outlined.ContentCopy, "Копировать заголовки") {
+                                MiniIcon(Icons.Outlined.ContentCopy, tr("Copy headers")) {
                                     copyText(
                                         model,
                                         headers.joinToString("\n") { "${it.name}: ${it.value}" },
@@ -155,7 +165,7 @@ fun ExchangeContent(model: AppState, exchange: Exchange) {
                             MonoText(
                                 headers
                                     .joinToString("\n") { "${it.name}: ${it.value}" }
-                                    .ifBlank { "Заголовков нет" },
+                                    .ifBlank { tr("No headers") },
                                 Modifier.fillMaxSize(),
                             )
                         }
@@ -175,10 +185,14 @@ fun ExchangeContent(model: AppState, exchange: Exchange) {
                                 { shell = it },
                                 Modifier.width(210.dp),
                             )
-                            Text("Команда не выполнялась", fontSize = 12.sp, color = Muted)
+                            Text(
+                                tr("The command has not been executed"),
+                                fontSize = 12.sp,
+                                color = Muted,
+                            )
                         }
                         MonoText(
-                            curl.getOrElse { it.message ?: "cURL недоступен" },
+                            curl.getOrElse { it.message ?: tr("cURL unavailable") },
                             Modifier.fillMaxSize(),
                         )
                     }
@@ -215,13 +229,13 @@ fun BodyViewer(model: AppState, body: Body, type: String, modifier: Modifier = M
                         val bytes = body.bytes()
                         if (mode == "Image" || mode == "Auto" && type.startsWith("image/")) {
                             require(bytes.size <= 20 * 1024 * 1024) {
-                                "Изображение больше 20 МБ; сохраните исходное тело"
+                                tr("Image exceeds 20 MB; save the original body")
                             }
                             ImageIO.createImageInputStream(ByteArrayInputStream(bytes)).use { input
                                 ->
                                 val readers = ImageIO.getImageReaders(input)
                                 require(readers.hasNext()) {
-                                    "Формат изображения не поддерживается. Выберите Text/HEX."
+                                    tr("Unsupported image format. Select Text/HEX.")
                                 }
                                 val reader = readers.next()
                                 try {
@@ -230,7 +244,7 @@ fun BodyViewer(model: AppState, body: Body, type: String, modifier: Modifier = M
                                         reader.getWidth(0).toLong() * reader.getHeight(0) <=
                                             16_000_000
                                     ) {
-                                        "Изображение больше 16 Мп; сохраните файл"
+                                        tr("Image exceeds 16 MP; save the file")
                                     }
                                 } finally {
                                     reader.dispose()
@@ -244,7 +258,7 @@ fun BodyViewer(model: AppState, body: Body, type: String, modifier: Modifier = M
                             )
                         } else BodyView(text = body.view(mode), bytes = bytes.size)
                     } catch (e: Exception) {
-                        BodyView(error = e.message ?: "Ошибка просмотра тела")
+                        BodyView(error = e.message ?: tr("Body preview error"))
                     }
                 }
         }
@@ -255,19 +269,24 @@ fun BodyViewer(model: AppState, body: Body, type: String, modifier: Modifier = M
         ) {
             Choice(
                 mode,
-                listOf("Auto", "Text", "JSON", "HTML-текст", "Image", "HEX", "Base64"),
-                { it },
+                listOf("Auto", "Text", "JSON", "HTML text", "Image", "HEX", "Base64"),
+                { tr(it) },
                 { mode = it },
                 Modifier.width(125.dp),
             )
-            Text("${view.bytes} Б", color = Muted, fontSize = 10.sp, modifier = Modifier.weight(1f))
-            MiniIcon(Icons.Outlined.ContentCopy, "Копировать представление", view.error.isEmpty()) {
+            Text(
+                tr("{0} B", view.bytes),
+                color = Muted,
+                fontSize = 10.sp,
+                modifier = Modifier.weight(1f),
+            )
+            MiniIcon(Icons.Outlined.ContentCopy, tr("Copy view"), view.error.isEmpty()) {
                 if (view.image != null)
-                    model.task("Копирование изображения") {
+                    model.task(tr("Copying image")) {
                         val image =
                             withContext(Dispatchers.IO) {
                                 ImageIO.read(ByteArrayInputStream(body.bytes()))
-                            } ?: error("Изображение не поддерживается буфером обмена")
+                            } ?: error(tr("The clipboard does not support this image"))
                         Toolkit.getDefaultToolkit()
                             .systemClipboard
                             .setContents(
@@ -286,18 +305,18 @@ fun BodyViewer(model: AppState, body: Body, type: String, modifier: Modifier = M
                                 },
                                 null,
                             )
-                        model.status = "Изображение скопировано"
+                        model.status = tr("Image copied")
                     }
                 else copyText(model, view.text)
             }
-            MiniIcon(Icons.Outlined.Save, "Сохранить исходные байты", model.busy.isEmpty()) {
+            MiniIcon(Icons.Outlined.Save, tr("Save original bytes"), model.busy.isEmpty()) {
                 chooseFile(true, if (body.complete) "body.bin" else "body.partial.bin")?.let {
                     model.saveBody(it, body)
                 }
             }
             MiniIcon(
                 Icons.Outlined.Description,
-                "Сохранить текст просмотра",
+                tr("Save view text"),
                 model.busy.isEmpty() && view.image == null,
             ) {
                 chooseFile(true, "body-view.txt", extension = "txt")?.let {
@@ -306,14 +325,14 @@ fun BodyViewer(model: AppState, body: Body, type: String, modifier: Modifier = M
             }
         }
         Text(
-            type.ifBlank { "Content-Type не указан" },
+            type.ifBlank { tr("Content-Type not specified") },
             color = Muted,
             fontSize = 10.sp,
             maxLines = 2,
         )
         if (!body.complete)
             Text(
-                "Тело отсутствует или захвачено частично. Точное повторение недоступно.",
+                tr("The body is unavailable or partially captured. Exact replay is unavailable."),
                 color = Amber,
                 fontSize = 11.sp,
             )
@@ -326,14 +345,16 @@ fun BodyViewer(model: AppState, body: Body, type: String, modifier: Modifier = M
                 ) {
                     Image(
                         view.image!!,
-                        "Тело HTTP: изображение",
+                        tr("HTTP body: image"),
                         Modifier.fillMaxSize().padding(12.dp),
                         contentScale = ContentScale.Fit,
                     )
                 }
             else ->
                 MonoText(
-                    view.text.ifEmpty { if (body.complete) "Тело пустое" else "Тело недоступно" },
+                    view.text.ifEmpty {
+                        if (body.complete) tr("Body is empty") else tr("Body unavailable")
+                    },
                     Modifier.fillMaxSize(),
                 )
         }

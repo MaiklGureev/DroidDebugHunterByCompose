@@ -7,15 +7,23 @@ import java.time.LocalTime
 import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
-enum class Page(val label: String, val caption: String) {
-    Traffic("Трафик", "HTTP-запросы и ответы"),
-    Devices("Устройства", "USB, Wi-Fi и Frida"),
-    Apps("Приложения", "Процессы, разрешения и данные"),
-    Logcat("Logcat", "Журнал Android в реальном времени"),
-    Tools("ADB-инструменты", "Сеть и диагностика устройства"),
-    Settings("Настройки", "Утилиты и поведение"),
-    Help("Справка", "Настройка и руководство"),
+enum class Page(private val labelKey: String, private val captionKey: String) {
+    Traffic("Traffic", "HTTP requests and responses"),
+    Devices("Devices", "USB, Wi-Fi and Frida"),
+    Apps("Apps", "Processes, permissions and data"),
+    Logcat("Logcat", "Live Android logs"),
+    Tools("ADB tools", "Device network and diagnostics"),
+    Settings("Settings", "Tools and behavior"),
+    Help("Help", "Setup and user guide");
+
+    val label
+        get() = tr(labelKey)
+
+    val caption
+        get() = tr(captionKey)
 }
 
 data class OutputWindow(val id: Long = System.nanoTime(), val title: String, val text: String)
@@ -26,7 +34,7 @@ data class CaptureCheck(val title: String, val ready: Boolean?, val detail: Stri
 
 class AppState {
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
-    var settings by mutableStateOf(Settings.load())
+    var settings by mutableStateOf(Settings.load().also { I18n.use(it.language) })
         private set
 
     var initialized by mutableStateOf(false)
@@ -34,7 +42,7 @@ class AppState {
 
     var page by mutableStateOf(Page.Traffic)
     var palette by mutableStateOf(false)
-    var status by mutableStateOf("Подготовка локальных ресурсов…")
+    var status by mutableStateOf(tr("Preparing local resources…"))
     var error by mutableStateOf("")
     var busy by mutableStateOf("")
         private set
@@ -91,6 +99,7 @@ class AppState {
     private val incomingLogs = Channel<LogEntry>(4096)
     private val messages = Channel<String>(1024)
     private var operation: Job? = null
+    private val settingsSaveMutex = Mutex()
     private var capture: CaptureSession? = null
     private var logcat: LogcatSession? = null
     private var fridaPid: Pair<String, String>? = null
@@ -117,10 +126,10 @@ class AppState {
             try {
                 withContext(Dispatchers.IO) { AppFiles.extract() }
                 initialized = true
-                status = "Готово. Подключите Android или импортируйте HAR."
+                status = tr("Ready. Connect Android or import a HAR file.")
                 refreshDevices(true)
             } catch (e: Exception) {
-                error = "Подготовка ресурсов: ${e.message}"
+                error = tr("Resource preparation: {0}", e.message)
             }
         }
         scope.launch {
@@ -163,11 +172,12 @@ class AppState {
 
     fun updateSettings(value: Settings) {
         settings = value
+        I18n.use(value.language)
         scope.launch {
             try {
-                withContext(Dispatchers.IO) { value.save() }
+                settingsSaveMutex.withLock { withContext(Dispatchers.IO) { settings.save() } }
             } catch (e: Exception) {
-                error = "Настройки не сохранены: ${e.message}"
+                error = tr("Settings were not saved: {0}", e.message)
             }
         }
     }
@@ -180,9 +190,9 @@ class AppState {
             scope.launch {
                 try {
                     block()
-                    if (status == title) status = "Готово"
+                    if (status == title) status = tr("Done")
                 } catch (e: CancellationException) {
-                    status = "Операция отменена"
+                    status = tr("Operation cancelled")
                 } catch (e: Exception) {
                     error = e.message ?: e.toString()
                     report("$title: $error")
@@ -195,6 +205,11 @@ class AppState {
 
     fun cancelOperation() {
         operation?.cancel()
+    }
+
+    fun changeLanguage(language: UiLanguage) {
+        updateSettings(settings.copy(language = language))
+        status = tr("Language changed")
     }
 
     suspend fun refreshDevices(showError: Boolean = false) {
@@ -218,7 +233,7 @@ class AppState {
                 selectedApp = null
                 permissions = emptyList()
                 if (selectedDevice != null) {
-                    status = "Подключение изменилось; потоки остановлены"
+                    status = tr("Connection changed; streams stopped")
                     report(status)
                 }
             }
@@ -227,7 +242,7 @@ class AppState {
             throw e
         } catch (e: Exception) {
             if (showError) {
-                error = "ADB: ${e.message}. Проверьте путь в настройках."
+                error = tr("ADB: {0}. Check the path in Settings.", e.message)
                 report(error)
             }
         } finally {
@@ -236,7 +251,7 @@ class AppState {
     }
 
     fun selectDevice(device: Device) =
-        task("Смена устройства") {
+        task(tr("Switching device")) {
             stopCapture()
             stopLogcat()
             selectedDevice = device
@@ -244,15 +259,15 @@ class AppState {
             selectedApp = null
             permissions = emptyList()
             updateSettings(settings.copy(lastSerial = device.serial))
-            status = "Выбрано: ${device.label}"
+            status = tr("Selected: {0}", device.label)
         }
 
     fun serial(): String =
         selectedDevice?.takeIf { it.state == "device" }?.serial
-            ?: error("Выберите авторизованное Android-устройство")
+            ?: error(tr("Select an authorized Android device"))
 
     fun loadApps() =
-        task("Загрузка приложений") {
+        task(tr("Loading apps")) {
             val serial = serial()
             val loaded = Adb(settings).applications(serial, ::report)
             if (selectedDevice?.serial == serial) {
@@ -262,7 +277,7 @@ class AppState {
                         it.packageName == (selectedApp?.packageName ?: settings.lastPackage)
                     }
                 permissions = emptyList()
-                status = "Загружено ${loaded.size} приложений"
+                status = tr("Loaded {0} apps", loaded.size)
             }
         }
 
@@ -276,21 +291,27 @@ class AppState {
         val device =
             selectedDevice
                 ?: run {
-                    error = "Выберите устройство"
+                    error = tr("Select a device")
                     return
                 }
         val app = selectedApp
         val run = {
             task(action.title) {
-                check(device.state == "device") { "Устройство недоступно" }
+                check(device.state == "device") { tr("Device unavailable") }
                 val output = Adb(settings).execute(action, device.serial, app, permission)
                 outputs +=
                     OutputWindow(
                         title = action.title,
                         text =
-                            "Устройство: ${device.label}\nПакет: ${app?.packageName ?: "—"} · профиль ${app?.user ?: "—"}\n\n$output",
+                            tr(
+                                "Device: {0}\nPackage: {1} · profile {2}\n\n{3}",
+                                device.label,
+                                app?.packageName ?: "—",
+                                app?.user ?: "—",
+                                output,
+                            ),
                     )
-                status = "${action.title}: выполнено"
+                status = tr("{0}: completed", action.title)
                 if (action == AdbAction.Grant || action == AdbAction.Revoke)
                     permissions = Adb(settings).permissions(device.serial, app!!)
                 if (action == AdbAction.Uninstall) {
@@ -301,34 +322,43 @@ class AppState {
             }
         }
         if (action.app && app == null) {
-            error = "Выберите приложение из списка"
+            error = tr("Select an app from the list")
             return
         }
         if (action.destructive)
             confirmation =
                 Confirmation(
                     action.title,
-                    "${device.label}\n${app!!.label}\n${app.packageName} · профиль ${app.user}\n\n${if(action==AdbAction.Uninstall) "Приложение будет удалено для этого профиля." else "Данные приложения будут безвозвратно удалены."}",
+                    tr(
+                        "{0}\n{1}\n{2} · profile {3}\n\n{4}",
+                        device.label,
+                        app!!.label,
+                        app.packageName,
+                        app.user,
+                        if (action == AdbAction.Uninstall)
+                            tr("The app will be uninstalled for this profile.")
+                        else tr("App data will be permanently deleted."),
+                    ),
                     run,
                 )
         else run()
     }
 
     fun loadPermissions() =
-        task("Загрузка разрешений") {
+        task(tr("Loading permissions")) {
             permissions =
-                Adb(settings).permissions(serial(), selectedApp ?: error("Выберите приложение"))
-            status = "Разрешения обновлены"
+                Adb(settings).permissions(serial(), selectedApp ?: error(tr("Select an app")))
+            status = tr("Permissions updated")
         }
 
     fun connect(address: String, code: String) =
-        task(if (code.isBlank()) "Подключение ADB" else "Сопряжение ADB") {
+        task(if (code.isBlank()) tr("Connecting ADB") else tr("Pairing ADB")) {
             status = Adb(settings).connect(address, code)
             refreshDevices(true)
         }
 
     fun disconnect() =
-        task("Отключение ADB") {
+        task(tr("Disconnecting ADB")) {
             val target = serial()
             stopCapture()
             stopLogcat()
@@ -339,17 +369,19 @@ class AppState {
     fun restartAdb() {
         confirmation =
             Confirmation(
-                "Перезапустить ADB?",
-                "Это остановит захват и общий ADB-сервер, включая соединения других программ.",
+                tr("Restart ADB?"),
+                tr(
+                    "This stops capture and the shared ADB server, including connections from other programs."
+                ),
             ) {
-                task("Перезапуск ADB") {
+                task(tr("Restarting ADB")) {
                     stopCapture()
                     stopLogcat()
                     val adb = Adb(settings)
                     adb.run("kill-server").requireSuccess()
                     adb.run("start-server").requireSuccess()
                     refreshDevices(true)
-                    status = "ADB перезапущен"
+                    status = tr("ADB restarted")
                 }
             }
     }
@@ -357,8 +389,8 @@ class AppState {
     fun rootAdb() {
         confirmation =
             Confirmation(
-                "Запросить adb root?",
-                "На поддерживаемой прошивке adbd будет перезапущен с root. Потоки будут остановлены.",
+                tr("Request adb root?"),
+                tr("On supported firmware, adbd restarts with root. Streams will stop."),
             ) {
                 task("adb root") {
                     val target = serial()
@@ -371,10 +403,10 @@ class AppState {
     }
 
     fun toggleCapture() =
-        task(if (capturing) "Остановка захвата" else "Запуск захвата") {
+        task(if (capturing) tr("Stopping capture") else tr("Starting capture")) {
             if (capturing) {
                 stopCapture()
-                status = "Захват остановлен"
+                status = tr("Capture stopped")
                 return@task
             }
             val target = serial()
@@ -395,7 +427,8 @@ class AppState {
                             operation?.join()
                             if (capture === owned) {
                                 stopCapture()
-                                error = "Движок захвата завершился. Подробности в журнале."
+                                error =
+                                    tr("The capture engine exited. See the journal for details.")
                             }
                         }
                     },
@@ -404,7 +437,7 @@ class AppState {
             try {
                 owned.start()
                 capturing = true
-                status = "${selectedMode.title}: захват активен"
+                status = tr("{0}: capture active", selectedMode.title)
             } catch (e: Exception) {
                 stopCapture()
                 throw e
@@ -419,10 +452,10 @@ class AppState {
     }
 
     fun toggleLogcat() =
-        task(if (logging) "Остановка Logcat" else "Запуск Logcat") {
+        task(if (logging) tr("Stopping Logcat") else tr("Starting Logcat")) {
             if (logging) {
                 stopLogcat()
-                status = "Logcat остановлен"
+                status = tr("Logcat stopped")
                 return@task
             }
             lateinit var owned: LogcatSession
@@ -440,7 +473,7 @@ class AppState {
                             operation?.join()
                             if (logcat === owned) {
                                 stopLogcat()
-                                status = "Logcat завершён. См. журнал."
+                                status = tr("Logcat finished. See the journal.")
                             }
                         }
                     },
@@ -449,7 +482,7 @@ class AppState {
             try {
                 owned.start()
                 logging = true
-                status = "Logcat: запись активна"
+                status = tr("Logcat: recording active")
             } catch (e: Exception) {
                 stopLogcat()
                 throw e
@@ -542,10 +575,10 @@ class AppState {
     }
 
     fun importHar(file: File) =
-        task("Импорт HAR") {
+        task(tr("Import HAR")) {
             val content =
                 withContext(Dispatchers.IO) {
-                    require(file.length() <= 64 * 1024 * 1024) { "HAR больше 64 МБ" }
+                    require(file.length() <= 64 * 1024 * 1024) { tr("HAR exceeds 64 MB") }
                     file.readText(Charsets.UTF_8)
                 }
             val imported = withContext(Dispatchers.Default) { Har.read(content) }
@@ -553,41 +586,41 @@ class AppState {
             trafficBytes += imported.sumOf { it.memoryCost() }
             trimTraffic()
             rebuildIndex()
-            status = "Импортировано ${imported.size} запросов · ${file.name}"
+            status = tr("Imported {0} requests · {1}", imported.size, file.name)
         }
 
     fun saveHar(file: File, snapshot: List<Exchange>) =
-        task("Экспорт HAR") {
+        task(tr("Export HAR")) {
             val content = withContext(Dispatchers.Default) { Har.write(snapshot) }
             withContext(Dispatchers.IO) { AppFiles.atomicWrite(file, content.toByteArray()) }
-            status = "Сохранено ${snapshot.count { !it.raw }} HTTP-запросов"
+            status = tr("Saved {0} HTTP requests", snapshot.count { !it.raw })
         }
 
     fun saveText(file: File, text: String) =
-        task("Сохранение файла") {
+        task(tr("Saving file")) {
             withContext(Dispatchers.IO) {
                 AppFiles.atomicWrite(file, text.toByteArray(Charsets.UTF_8))
             }
-            status = "Сохранено: ${file.absolutePath}"
+            status = tr("Saved: {0}", file.absolutePath)
         }
 
     fun saveBody(file: File, body: Body) =
-        task("Сохранение тела") {
+        task(tr("Saving body")) {
             withContext(Dispatchers.IO) { AppFiles.atomicWrite(file, body.bytes()) }
-            status = "Тело сохранено: ${file.name}"
+            status = tr("Body saved: {0}", file.name)
         }
 
     fun prepareCapture(vpn: Boolean) =
-        task(if (vpn) "Подготовка CA и VPN" else "Подготовка CA") {
+        task(if (vpn) tr("Preparing CA and VPN") else tr("Preparing CA")) {
             check(!capturing)
-            val app = if (vpn) selectedApp ?: error("Выберите приложение") else null
+            val app = if (vpn) selectedApp ?: error(tr("Select an app")) else null
             CaptureSession.prepareAssets(settings, app)
-            status = "CA${if(vpn) " и VPN-профиль" else ""} подготовлены"
+            status = tr("CA{0} prepared", if (vpn) tr(" and VPN profile") else "")
         }
 
     fun sendCa() =
-        task("Передача CA") {
-            check(AppFiles.ca.isFile) { "Сначала подготовьте CA" }
+        task(tr("Sending CA")) {
+            check(AppFiles.ca.isFile) { tr("Prepare the CA first") }
             val adb = Adb(settings)
             val target = serial()
             adb.device(
@@ -608,24 +641,28 @@ class AppState {
                 if (r.code == 0 && !r.text.contains("Error:", true)) break
             }
             status =
-                "CA в Download/DroidDebugHunter-CA.cer. Android: Безопасность → Установить сертификат → Сертификат CA."
+                tr(
+                    "CA is in Download/DroidDebugHunter-CA.cer. Android: Security → Install certificate → CA certificate."
+                )
             outputs +=
                 OutputWindow(
-                    title = "Установка CA",
+                    title = tr("CA installation"),
                     text =
                         status +
-                            "\n\nПодтвердите установку на телефоне. Приложение должно доверять пользовательским CA; pinning может блокировать HTTPS.",
+                            tr(
+                                "\n\nConfirm installation on the phone. The app must trust user CAs; pinning may block HTTPS."
+                            ),
                 )
         }
 
     fun sendVpn() =
-        task("Передача VPN-профиля") {
-            val app = selectedApp ?: error("Выберите приложение")
+        task(tr("Sending VPN profile")) {
+            val app = selectedApp ?: error(tr("Select an app"))
             val target = serial()
             val adb = Adb(settings)
             adb.validateApp(target, app)
             val profile = File(CaptureSession.profile(app, settings), "ddh.conf")
-            check(profile.isFile) { "Сначала подготовьте VPN-профиль" }
+            check(profile.isFile) { tr("Prepare the VPN profile first") }
             if (
                 !adb.shell(target, "pm path --user ${app.user} com.wireguard.android")
                     .contains("package:")
@@ -633,7 +670,7 @@ class AppState {
                 val apk =
                     File(settings.tools, "android-tools").listFiles()?.firstOrNull {
                         it.extension == "apk" && it.name.startsWith("com.wireguard.android-")
-                    } ?: error("Нет локального APK WireGuard")
+                    } ?: error(tr("No local WireGuard APK"))
                 adb.device(
                         target,
                         "install",
@@ -651,7 +688,9 @@ class AppState {
                 "am start --user ${app.user} -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -p com.wireguard.android",
             )
             status =
-                "WireGuard: + → Импорт из файла → Download/ddh.conf. Запустите сервер, включите туннель, подтвердите VPN."
+                tr(
+                    "WireGuard: + → Import from file → Download/ddh.conf. Start the server, enable the tunnel and confirm VPN consent."
+                )
             outputs += OutputWindow(title = "WireGuard", text = status)
         }
 
@@ -666,7 +705,7 @@ class AppState {
             ?.sortedBy { it.name } ?: emptyList()
 
     fun installFrida(file: File? = null) =
-        task("Установка frida-server") {
+        task(tr("Installing frida-server")) {
             val target = serial()
             val adb = Adb(settings)
             val arch = adb.architecture(target)
@@ -675,23 +714,23 @@ class AppState {
                     ?: fridaFiles().firstOrNull {
                         it.name == "frida-server-${Adb.FRIDA_VERSION}-android-$arch"
                     }
-                    ?: error("Нет frida-server ${Adb.FRIDA_VERSION} для $arch")
+                    ?: error(tr("No frida-server {0} for {1}", Adb.FRIDA_VERSION, arch))
             withContext(Dispatchers.IO) { Adb.validateElf(server, arch) }
             val remote = "/data/local/tmp/ddhc-frida-server"
-            check(fridaPid == null) { "Сначала остановите запущенный нами frida-server" }
+            check(fridaPid == null) { tr("Stop the frida-server started by this session first") }
             adb.device(target, "push", server.absolutePath, remote, timeout = 120000)
                 .requireSuccess()
             adb.shell(target, "chmod 755 $remote")
             val version = adb.shell(target, "$remote --version")
             check(version == Adb.FRIDA_VERSION) {
-                "Версия сервера $version, нужен ${Adb.FRIDA_VERSION}"
+                tr("Server version is {0}; {1} is required", version, Adb.FRIDA_VERSION)
             }
-            status = "frida-server $version ($arch) установлен"
+            status = tr("frida-server {0} ({1}) installed", version, arch)
         }
 
     fun startFrida() =
-        task("Запуск frida-server") {
-            check(fridaPid == null) { "Сервер уже запущен этой сессией" }
+        task(tr("Starting frida-server")) {
+            check(fridaPid == null) { tr("This session has already started the server") }
             val target = serial()
             val adb = Adb(settings)
             check(
@@ -708,14 +747,14 @@ class AppState {
                     )
                     .lineSequence()
                     .lastOrNull { it.matches(Regex("[0-9]+")) }
-                    ?: error("Не удалось получить PID frida-server")
+                    ?: error(tr("Cannot obtain the frida-server PID"))
             fridaPid = target to pid
             fridaSettings = settings
             delay(500)
             check(adb.shell(target, "cat /proc/$pid/cmdline").contains("ddhc-frida-server")) {
-                "frida-server завершился. Проверьте root и порт 27042."
+                tr("frida-server exited. Check root and port 27042.")
             }
-            status = "frida-server активен · PID $pid"
+            status = tr("frida-server active · PID {0}", pid)
         }
 
     suspend fun stopFridaOwned() {
@@ -731,14 +770,14 @@ class AppState {
     }
 
     fun stopFrida() =
-        task("Остановка frida-server") {
+        task(tr("Stopping frida-server")) {
             stopCapture()
             stopFridaOwned()
-            status = "Собственный frida-server остановлен"
+            status = tr("Owned frida-server stopped")
         }
 
     fun checkTools() =
-        task("Проверка утилит") {
+        task(tr("Checking tools")) {
             val config = settings
             val adb =
                 runCatching { Adb(config).run("version").requireSuccess() }
@@ -766,18 +805,25 @@ class AppState {
                             )
                             .text
                     }
-                    .getOrElse { "Модули: ${it.message}" }
+                    .getOrElse { tr("Modules: {0}", it.message) }
             outputs +=
                 OutputWindow(
-                    title = "Проверка утилит",
+                    title = tr("Checking tools"),
                     text =
-                        "Каталог: ${config.tools}\n\n$adb\n\n$python\n\n$modules\n\nfrida-server: ${fridaFiles().joinToString { it.name }}",
+                        tr(
+                            "Directory: {0}\n\n{1}\n\n{2}\n\n{3}\n\nfrida-server: {4}",
+                            config.tools,
+                            adb,
+                            python,
+                            modules,
+                            fridaFiles().joinToString { it.name },
+                        ),
                 )
-            status = "Проверка завершена"
+            status = tr("Check completed")
         }
 
     fun checkCapture() =
-        task("Проверка готовности захвата") {
+        task(tr("Checking capture readiness")) {
             val config = settings
             val selectedMode = mode
             val app = selectedApp
@@ -790,25 +836,25 @@ class AppState {
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
-                    checks += CaptureCheck(title, false, e.message ?: "Недоступно")
+                    checks += CaptureCheck(title, false, e.message ?: tr("Unavailable"))
                 }
                 modeChecks = checks.toList()
             }
             val adb = Adb(config)
             check("ADB") { adb.run("version").requireSuccess().lineSequence().first() }
-            check("Устройство") {
-                require(target?.state == "device") { "Выберите авторизованное устройство" }
+            check(tr("Device")) {
+                require(target?.state == "device") { tr("Select an authorized device") }
                 check(adb.device(target.serial, "get-state").requireSuccess() == "device")
                 target.label
             }
             if (selectedMode != CaptureMode.Proxy)
-                check("Приложение") {
-                    requireNotNull(app) { "Выберите приложение" }
+                check(tr("App")) {
+                    requireNotNull(app) { tr("Select an app") }
                     requireNotNull(target)
                     adb.validateApp(target.serial, app)
-                    "${app.packageName} · UID ${app.uid} · профиль ${app.user}"
+                    tr("{0} · UID {1} · profile {2}", app.packageName, app.uid, app.user)
                 }
-            check("Движок Python") {
+            check(tr("Python engine")) {
                 val code =
                     if (selectedMode == CaptureMode.Proxy || selectedMode == CaptureMode.Vpn)
                         "import mitmproxy, mitmproxy_rs; print('mitmproxy: OK')"
@@ -822,7 +868,7 @@ class AppState {
                     check("Gadget / run-as") {
                         requireNotNull(app)
                         requireNotNull(target)
-                        check(config.spawn) { "Включите запуск приложения" }
+                        check(config.spawn) { tr("Enable app launch at startup") }
                         adb.shell(target.serial, "run-as ${Adb.quote(app.packageName)} id")
                         val arch = adb.architecture(target.serial, app)
                         val file =
@@ -831,16 +877,16 @@ class AppState {
                                 "frida-gadget/frida-gadget-${Adb.FRIDA_VERSION}-android-$arch.so",
                             )
                         withContext(Dispatchers.IO) { Adb.validateElf(file, arch) }
-                        "Gadget $arch найден, run-as доступен"
+                        tr("Gadget {0} found; run-as is available", arch)
                     }
                 else
                     check("frida-server") {
                         requireNotNull(target)
                         val processes = adb.shell(target.serial, "ps -A")
                         check(processes.contains("frida", true)) {
-                            "frida-server не найден. Установите и запустите его на устройстве."
+                            tr("frida-server not found. Install and start it on the device.")
                         }
-                        "Процесс Frida найден; совместимость проверяется при подключении"
+                        tr("Frida process found; compatibility is checked on connection")
                     }
             } else {
                 checks +=
@@ -848,8 +894,8 @@ class AppState {
                         "HTTPS / CA",
                         null,
                         if (AppFiles.ca.isFile)
-                            "CA подготовлен. Установку и доверие CA подтвердите на Android."
-                        else "Подготовьте CA и установите его на Android для HTTPS.",
+                            tr("CA prepared. Confirm CA installation and trust on Android.")
+                        else tr("Prepare and install the CA on Android for HTTPS."),
                     )
                 if (selectedMode == CaptureMode.Vpn) {
                     check("VPN endpoint") { CaptureSession.endpoint(config) }
@@ -866,28 +912,29 @@ class AppState {
                             File(config.tools, "android-tools").listFiles()?.any {
                                 it.extension == "apk"
                             } == true
-                        check(installed || apk) {
-                            "WireGuard не установлен; локальный APK отсутствует"
-                        }
-                        if (installed) "WireGuard установлен"
-                        else "Локальный APK найден; установите при передаче профиля"
+                        check(installed || apk) { tr("WireGuard is not installed; no local APK") }
+                        if (installed) tr("WireGuard installed")
+                        else tr("Local APK found; install when sending the profile")
                     }
                     checks +=
                         CaptureCheck(
-                            "Разрешение VPN",
+                            tr("VPN permission"),
                             null,
-                            "Импортируйте профиль, подтвердите VPN и включите туннель на телефоне.",
+                            tr(
+                                "Import the profile, confirm VPN consent and enable the tunnel on the phone."
+                            ),
                         )
                 }
             }
             modeChecks = checks.toList()
             status =
-                if (checks.any { it.ready == false }) "Есть препятствия запуску: см. чек-лист"
-                else "Автоматические проверки пройдены; выполните ручные шаги Android"
+                if (checks.any { it.ready == false })
+                    tr("Startup prerequisites failed: see the checklist")
+                else tr("Automatic checks passed; complete the manual Android steps")
         }
 
     fun setupTools(download: Boolean, component: String) =
-        task(if (download) "Подготовка утилит" else "Проверка комплекта") {
+        task(if (download) tr("Preparing tools") else tr("Checking bundle")) {
             val config = settings
             val result =
                 Processes.run(
@@ -906,18 +953,23 @@ class AppState {
                     if (download) 1200000 else 30000,
                 )
             outputs +=
-                OutputWindow(title = "Настройка утилит · код ${result.code}", text = result.text)
+                OutputWindow(
+                    title = tr("Tool setup · exit code {0}", result.code),
+                    text = result.text,
+                )
             result.requireSuccess()
-            status = "Утилиты: операция завершена"
+            status = tr("Tools: operation completed")
         }
 
     fun resetCapture() {
         confirmation =
             Confirmation(
-                "Сбросить CA и VPN?",
-                "Остановите захват перед сбросом. Текущие файлы будут перенесены в резервную папку. Новый CA и VPN-профили потребуется установить на Android заново.",
+                tr("Reset CA and VPN?"),
+                tr(
+                    "Stop capture before resetting. Current files will be backed up. Install the new CA and VPN profiles on Android again."
+                ),
             ) {
-                task("Сброс CA и VPN") {
+                task(tr("Resetting CA and VPN")) {
                     check(!capturing)
                     withContext(Dispatchers.IO) {
                         CaptureLock().use {
@@ -934,7 +986,7 @@ class AppState {
                             }
                         }
                     }
-                    status = "CA и VPN перенесены в резервную папку"
+                    status = tr("CA and VPN moved to a backup directory")
                 }
             }
     }
@@ -947,9 +999,9 @@ class AppState {
             try {
                 stopFridaOwned()
             } catch (e: Exception) {
-                report("Остановка Frida: ${e.message}")
+                report(tr("Stopping Frida: {0}", e.message))
             }
-            withContext(Dispatchers.IO) { settings.save() }
+            settingsSaveMutex.withLock { withContext(Dispatchers.IO) { settings.save() } }
         }
         scope.cancel()
     }

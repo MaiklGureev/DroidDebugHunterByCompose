@@ -8,23 +8,29 @@ import java.nio.channels.FileLock
 import java.nio.file.StandardOpenOption
 import kotlinx.coroutines.*
 
-enum class CaptureMode(val title: String, val hint: String) {
+enum class CaptureMode(private val titleKey: String, private val hintKey: String) {
     Proxy(
-        "HTTP(S)-прокси",
-        "Без root · системный прокси через ADB reverse. HTTPS требует доверия CA. Пакет и UID неизвестны.",
+        "HTTP(S) proxy",
+        "Rootless · system proxy over ADB reverse. HTTPS requires CA trust. Package and UID are unknown.",
     ),
     OkHttp(
         "Frida · OkHttp",
-        "OkHttp 3/4 выбранного приложения. Нужен frida-server с root или debuggable-приложение + Gadget.",
+        "OkHttp 3/4 in the selected app. Requires root frida-server or a debuggable app + Gadget.",
     ),
     Native(
         "Frida · Native TLS",
-        "TLS-функции процесса, HTTP/1 и HTTP/2. Статические TLS-функции и HTTP/3 могут быть недоступны.",
+        "Process TLS functions, HTTP/1 and HTTP/2. Static TLS functions and HTTP/3 may be unavailable.",
     ),
     Vpn(
         "VPN · WireGuard",
-        "Без root · WireGuard на Android. Пакет указан по allowlist профиля. HTTPS требует доверия CA.",
-    ),
+        "Rootless · WireGuard on Android. Package attribution uses the profile allowlist. HTTPS requires CA trust.",
+    );
+
+    val title
+        get() = tr(titleKey)
+
+    val hint
+        get() = tr(hintKey)
 }
 
 class CaptureLock : AutoCloseable {
@@ -39,7 +45,7 @@ class CaptureLock : AutoCloseable {
     init {
         lock =
             try {
-                channel.tryLock() ?: error("Другая сессия использует данные захвата")
+                channel.tryLock() ?: error(tr("Another session is using the capture store"))
             } catch (e: Exception) {
                 channel.close()
                 throw e
@@ -79,7 +85,9 @@ class ProxyLease(
                     .requireSuccess()
                     .toIntOrNull()
             }
-        check(allocated != null && allocated in 1..65535) { "ADB reverse не вернул порт" }
+        check(allocated != null && allocated in 1..65535) {
+            tr("ADB reverse did not return a port")
+        }
         remote = "tcp:$allocated"
         host = "tcp:$port"
         currentCoroutineContext().ensureActive()
@@ -113,7 +121,7 @@ class ProxyLease(
                     if (original[key] == "null") adb.shell(serial, "settings delete global $key")
                     else put(key, original.getValue(key))
                 }
-            } else log("Прокси изменён пользователем; новые настройки сохранены")
+            } else log(tr("Proxy changed by another owner; new settings preserved"))
             touched = false
         }
         remote?.let { owned ->
@@ -150,10 +158,10 @@ class CaptureSession(
 
     suspend fun start() {
         check(adb.device(serial, "get-state").requireSuccess() == "device") {
-            "Устройство не авторизовано / недоступно"
+            tr("Device unauthorized / unavailable")
         }
         if (mode != CaptureMode.Proxy) {
-            requireNotNull(app) { "Выберите приложение" }
+            requireNotNull(app) { tr("Select an app") }
             adb.validateApp(serial, app)
         }
         dataLock = withContext(Dispatchers.IO) { CaptureLock() }
@@ -163,7 +171,7 @@ class CaptureSession(
                 val port =
                     if (mode == CaptureMode.Vpn)
                         settings.vpnPort.toIntOrNull()?.takeIf { it in 1024..65535 }
-                            ?: error("UDP-порт: 1024…65535")
+                            ?: error(tr("UDP port: 1024…65535"))
                     else withContext(Dispatchers.IO) { ServerSocket(0).use { it.localPort } }
                 val command =
                     mutableListOf(
@@ -205,17 +213,17 @@ class CaptureSession(
                         )
                         .requireSuccess()
                 check(version == Adb.FRIDA_VERSION) {
-                    "Нужен Frida ${Adb.FRIDA_VERSION}, обнаружен $version"
+                    tr("Frida {0} is required; found {1}", Adb.FRIDA_VERSION, version)
                 }
                 var gadget: File? = null
                 val connection: List<String>
                 if (settings.gadget) {
-                    require(settings.spawn) { "Для Gadget включите запуск приложения" }
+                    require(settings.spawn) { tr("Enable app launch for Gadget") }
                     check(
                         adb.shell(serial, "run-as ${Adb.quote(app!!.packageName)} id")
                             .contains("uid=")
                     ) {
-                        "Gadget требует доступный run-as / debuggable"
+                        tr("Gadget requires working run-as / debuggable")
                     }
                     val arch = adb.architecture(serial, app)
                     gadget =
@@ -233,7 +241,7 @@ class CaptureSession(
                                 .toIntOrNull()
                         }
                     check(allocated != null && allocated in 1..65535) {
-                        "ADB forward не вернул порт"
+                        tr("ADB forward did not return a port")
                     }
                     forward = "tcp:$allocated"
                     currentCoroutineContext().ensureActive()
@@ -288,7 +296,10 @@ class CaptureSession(
                                                     addProperty("kind", "diagnostic")
                                                     addProperty(
                                                         "message",
-                                                        "Неверное событие движка: ${error.message}",
+                                                        tr(
+                                                            "Invalid engine event: {0}",
+                                                            error.message,
+                                                        ),
                                                     )
                                                     addProperty("rawBody", line.take(65536))
                                                     addProperty("rawEncoding", "text")
@@ -313,21 +324,23 @@ class CaptureSession(
                         )
                     if (!stopping) {
                         ready.completeExceptionally(
-                            IllegalStateException("Движок завершился (код $code). См. журнал.")
+                            IllegalStateException(
+                                tr("The engine exited (code {0}). See the journal.", code)
+                            )
                         )
-                        log("Движок завершился: $code")
+                        log(tr("Engine exited: {0}", code))
                     }
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
                     ready.completeExceptionally(e)
-                    log("Ошибка движка: ${e.message}")
+                    log(tr("Engine error: {0}", e.message))
                 } finally {
                     if (!stopping) onEnded()
                 }
             }
         withTimeout(45000) { ready.await() }
-        check(reader?.isActive == true) { "Движок завершился после подтверждения готовности" }
+        check(reader?.isActive == true) { tr("The engine exited after confirming readiness") }
         if (mode == CaptureMode.Proxy) {
             proxy = ProxyLease(adb, serial, log)
             proxy!!.start(args.last().toInt())
@@ -344,9 +357,9 @@ class CaptureSession(
                     log("$name: ${e.message}")
                 }
             }
-            cleanup("Восстановление прокси") { proxy?.close() }
+            cleanup(tr("Restoring proxy")) { proxy?.close() }
             proxy = null
-            cleanup("Остановка движка") {
+            cleanup(tr("Stopping engine")) {
                 process?.stop(mode != CaptureMode.OkHttp)
                 reader?.join()
             }
@@ -359,7 +372,7 @@ class CaptureSession(
                         serial,
                         "am broadcast -a com.wireguard.android.action.SET_TUNNEL_DOWN --es tunnel ddh -p com.wireguard.android",
                     )
-                    log("Проверьте, что туннель WireGuard выключен на Android")
+                    log(tr("Check that the WireGuard tunnel is disabled on Android"))
                 }
             forward?.let { owned ->
                 cleanup("ADB forward") {
@@ -384,9 +397,9 @@ class CaptureSession(
             require(
                 settings.vpnHost.matches(Regex("(?:[A-Za-z0-9][A-Za-z0-9.\\-]*|\\[[a-fA-F0-9:]+])"))
             ) {
-                "Укажите IP / DNS компьютера, доступный с Android"
+                tr("Enter a computer IP / DNS name reachable from Android")
             }
-            require(settings.vpnPort.toIntOrNull() in 1024..65535) { "UDP-порт: 1024…65535" }
+            require(settings.vpnPort.toIntOrNull() in 1024..65535) { tr("UDP port: 1024…65535") }
             return "${settings.vpnHost}:${settings.vpnPort}"
         }
 

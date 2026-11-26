@@ -30,7 +30,16 @@ fun checkApplication(): Map<String, Any> {
                     check(model.selectedDevice == device) {
                         "Device selection failed: ${model.error}"
                     }
+                    repeat(4) {
+                        model.changeLanguage(UiLanguage.Russian)
+                        check(Page.Settings.label == "Настройки")
+                        model.changeLanguage(UiLanguage.English)
+                        check(Page.Settings.label == "Settings")
+                    }
                     model.shutdown()
+                    check(Settings.load().language == UiLanguage.English) {
+                        "The latest interface language was not persisted"
+                    }
                     check(!model.scope.isActive) {
                         "Application scope is still active after shutdown"
                     }
@@ -39,9 +48,25 @@ fun checkApplication(): Map<String, Any> {
                 withContext(NonCancellable) { model.scope.coroutineContext[Job]?.cancelAndJoin() }
             }
         }
+        runBlocking(Dispatchers.Main) {
+            val restored = AppState()
+            try {
+                check(restored.settings.language == UiLanguage.English)
+                check(I18n.language == UiLanguage.English && Page.Settings.label == "Settings")
+                withTimeout(15000) {
+                    while (!restored.initialized || restored.refreshing) delay(10)
+                    restored.shutdown()
+                }
+            } finally {
+                withContext(NonCancellable) {
+                    restored.scope.coroutineContext[Job]?.cancelAndJoin()
+                }
+            }
+        }
         return mapOf(
             "deviceSelection" to true,
             "shutdown" to true,
+            "languagePersistence" to true,
             "applicationSource" to
                 AppState::class.java.protectionDomain.codeSource.location.toString(),
         )
