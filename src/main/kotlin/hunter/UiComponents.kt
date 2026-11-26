@@ -21,7 +21,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.awt.FileDialog
 import java.awt.Frame
-import java.awt.KeyboardFocusManager
 import java.awt.Toolkit
 import java.awt.datatransfer.StringSelection
 import java.io.File
@@ -301,12 +300,12 @@ fun chooseFile(
     title: String = if (save) "Сохранить файл" else "Открыть файл",
     extension: String = "",
 ): File? {
-    val active = KeyboardFocusManager.getCurrentKeyboardFocusManager().activeWindow
-    val owner = (active as? Frame) ?: (active?.owner as? Frame)
-    val dialog = FileDialog(owner, title, if (save) FileDialog.SAVE else FileDialog.LOAD)
+    // An unowned native chooser remains independently selectable in Windows,
+    // including when the Compose window is activated during file selection.
+    val dialog = FileDialog(null as Frame?, title, if (save) FileDialog.SAVE else FileDialog.LOAD)
     try {
         if (name.isNotBlank()) dialog.file = name
-        dialog.setLocationRelativeTo(active)
+        dialog.setLocationRelativeTo(null)
         dialog.isVisible = true
         val selected = dialog.file ?: return null
         val actual =
