@@ -15,6 +15,7 @@
 | Windows / macOS / Linux | [Платформы](PLATFORMS.ru.md) | [Platforms](PLATFORMS.md) |
 | Архитектура | [Архитектура](ARCHITECTURE.ru.md) | [Architecture](ARCHITECTURE.md) |
 | Выпуск релизов | [Выпуск](RELEASING.ru.md) | [Releasing](RELEASING.md) |
+| Релиз 1.1.1 | [Изменения](releases/1.1.1.ru.md) | [Notes](releases/1.1.1.md) |
 | Релиз 1.1.0 | [Изменения](releases/1.1.0.ru.md) | [Notes](releases/1.1.0.md) |
 | Участие в разработке | [Участие](../CONTRIBUTING.ru.md) | [Contributing](../CONTRIBUTING.md) |
 | Безопасность | [Безопасность](../SECURITY.ru.md) | [Security](../SECURITY.md) |

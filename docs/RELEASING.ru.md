@@ -1,8 +1,8 @@
-# Выпуск 1.1.0
+# Выпуск релизов
 
 [English](RELEASING.md) | **Русский**
 
-Workflow `Release` собирает Windows x64, Linux x64 и macOS arm64/x64, проверяет встроенную Java и создаёт установщики/переносимые архивы. Системные JDK/JRE для готовых приложений не требуются. Внешние Android/Python-комплекты в публичные образы не включаются.
+Текущая версия — `v1.1.1`. Workflow `Release` собирает Windows x64, Linux x64 и macOS arm64/x64, проверяет встроенную Java и создаёт установщики/переносимые архивы. Системные JDK/JRE для готовых приложений не требуются. Внешние Android/Python-комплекты в публичные образы не включаются.
 
 Проверка локальной упаковки: `python -m unittest discover -s scripts -p 'test_*.py'`. Версия в Gradle, `packageVersion`, release notes и `RELEASE_TAG` в workflow должны совпадать.
 
