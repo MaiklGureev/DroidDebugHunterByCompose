@@ -1,0 +1,122 @@
+name: Release
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - '.github/workflows/release.yml'
+      - 'scripts/package_release.py'
+      - 'docs/releases/**'
+      - 'docs/README-FIRST.md'
+  workflow_dispatch:
+
+env:
+  RELEASE_TAG: v1.1.0
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  package:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: windows-latest
+            platform: windows
+            arch: x64
+            installer: packageMsi
+          - runner: ubuntu-latest
+            platform: linux
+            arch: x64
+            installer: packageDeb
+          - runner: macos-latest
+            platform: macos
+            arch: arm64
+            installer: packageDmg
+          - runner: macos-15-intel
+            platform: macos
+            arch: x64
+            installer: packageDmg
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+      - name: Validate release version
+        shell: bash
+        run: python scripts/package_release.py --verify-tag "$RELEASE_TAG"
+      - name: Check repository and packaging helpers
+        run: |
+          python scripts/check_repository.py
+          python -m unittest discover -s scripts -p "test_*.py"
+      - name: Install Debian packaging dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y fakeroot
+      - name: Build and test tagged source
+        shell: bash
+        env:
+          INSTALLER_TASK: ${{ matrix.installer }}
+        run: ./gradlew test createDistributable "$INSTALLER_TASK" --console=plain
+      - name: Verify Windows bundled runtime
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./scripts/smoke_windows.ps1 -ApplicationRoot ./build/compose/binaries-1.1.0/main/app/DroidDebugHunterByCompose
+      - name: Verify Unix bundled runtime
+        if: runner.os != 'Windows'
+        shell: bash
+        run: python scripts/package_release.py --runtime-check
+      - name: Prepare downloadable release assets
+        shell: bash
+        env:
+          RELEASE_PLATFORM: ${{ matrix.platform }}
+          RELEASE_ARCH: ${{ matrix.arch }}
+        run: python scripts/package_release.py --platform "$RELEASE_PLATFORM" --arch "$RELEASE_ARCH"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.platform }}-${{ matrix.arch }}
+          path: build/release-assets/*
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: release-tests-${{ matrix.platform }}-${{ matrix.arch }}
+          path: build/reports/tests/test/
+
+  publish:
+    needs: package
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.event.head_commit.message, 'release:')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          path: build/release-downloads
+      - name: Verify complete release and checksums
+        run: python scripts/package_release.py --collect build/release-downloads
+      - name: Publish complete GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_SHA: ${{ github.sha }}
+        run: |
+          if gh release view "$RELEASE_TAG" --json isDraft --jq .isDraft > build/release-exists.txt; then
+            test "$(cat build/release-exists.txt)" = true || { echo 'Release already published; refusing to replace it.'; exit 1; }
+          else
+            gh release create "$RELEASE_TAG" --target "$RELEASE_SHA" --draft --title "DroidDebugHunter 1.1.0" --notes-file docs/releases/1.1.0.md
+          fi
+          gh release upload "$RELEASE_TAG" build/release-assets/* --clobber
+          gh release edit "$RELEASE_TAG" --draft=false --latest

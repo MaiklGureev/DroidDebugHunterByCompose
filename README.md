@@ -20,6 +20,8 @@ Desktop-приложение на **Kotlin + Compose Desktop + coroutines** дл
 
 ## Запуск из исходников
 
+Готовые установщики и переносимые архивы: [GitHub Releases](https://github.com/MaiklGureev/DroidDebugHunterByCompose/releases). Выберите Windows x64, macOS Apple Silicon/Intel или Linux x64. Java включена в приложение; инструкция первого запуска находится в релизе и архивах.
+
 Нужен **JDK 17**; Gradle wrapper включён. JDK 21 можно использовать для запуска Gradle при наличии toolchain 17. В IntelliJ IDEA выберите JDK 17 для проекта и Gradle JVM, затем конфигурацию `desktop`.
 
 ```powershell
