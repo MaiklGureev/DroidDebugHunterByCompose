@@ -1,52 +1,54 @@
 # DroidDebugHunter · Compose
 
-Desktop-приложение на **Kotlin + Compose Desktop + coroutines** для Android: устройства и ADB, управление Frida, анализ HTTP(S) и потоковый Logcat. Перенос функциональности [DroidDebugHunter](https://github.com/MaiklGureev/DroidDebugHunter) с WPF на Compose.
+**English** | [Русская документация](README.ru.md)
 
-Настройка и нативная сборка предусмотрены для **Windows, macOS и Linux**. ОС/CPU определяются автоматически; пути к ADB и Python сохраняются отдельно для каждой платформы. Интерфейс, ADB, HAR и Logcat написаны на Kotlin; Python/JS-движки Frida и mitmproxy включены в исходники. См. [настройку платформ](docs/PLATFORMS.md).
+An Android debugging desktop application built with **Kotlin, Compose Desktop and coroutines**. Manage ADB devices and apps, control Frida, inspect HTTP(S) traffic and stream Logcat on **Windows, macOS and Linux**. This is the Compose port of the [WPF DroidDebugHunter](https://github.com/MaiklGureev/DroidDebugHunter).
 
-**Готовая Windows-сборка запускается без установленного JDK/JRE:** Java runtime включён в папку приложения. JDK 17 требуется только для разработки и сборки из исходников. macOS/Linux-поставки также содержат собственный runtime; их нужно собирать на соответствующей ОС.
+[Download a release](https://github.com/MaiklGureev/DroidDebugHunterByCompose/releases) · [Documentation](docs/README.md) · [Android setup](src/main/resources/runtime/help/ANDROID_SETUP_GUIDE.en.md) · [MIT license](LICENSE)
 
-## Возможности
+Native distributions include their own Java runtime: **users do not need a system JDK or JRE**. Downloads support Windows x64, Linux x64, and macOS Apple Silicon and Intel. ADB, Python and capture tools are configured separately. The desktop UI is currently in Russian; the English guides retain UI labels where useful.
 
-- USB, эмуляторы, Wi-Fi ADB, сопряжение Android 11+, автообновление устройств и сохранение выбора.
-- Приложения: названия, пакеты, UID/App ID, сторонние/системные, Android-профили, запуск/остановка/перезапуск, JDWP, сведения и APK-пути, runtime-разрешения, очистка данных и удаление с подтверждением.
-- frida-server: каталог четырёх ABI, проверка ELF и версии, установка, запуск с root и остановка собственного процесса. Для debuggable APK — сценарий Gadget/run-as.
-- Четыре режима захвата: HTTP(S)-прокси через ADB reverse, Frida OkHttp, Frida Native TLS, VPN WireGuard. Пошаговая настройка, проверка готовности, CA и сохранённые VPN-профили.
-- Импорт **и экспорт HAR** без телефона, фильтры запросов, сортировка, отдельные окна деталей с живыми обновлениями, cURL для PowerShell 7.3+ и sh/bash/zsh.
-- Тела: Auto, Text, JSON, HTML-текст, Image, HEX, Base64. Копирование текста/изображения, сохранение точных исходных байтов и текста просмотра. Частичные тела отмечаются явно.
-- Logcat: система или выбранный UID, буферы/история, фильтры Regex/tag/уровень/PID/TID/UID, несколько выбранных строк, автопрокрутка, отдельные окна, TXT/CSV/JSONL из снимка.
-- Сеть и диагностика Android, ADB push/pull, установка APK, отдельные окна результатов.
-- Тёмная и светлая темы, палитра команд, отмена операций и журнал ошибок.
+## Features
 
-## Запуск из исходников
+- USB, emulator and Wi-Fi ADB, Android 11+ pairing, automatic device refresh and remembered selection.
+- Apps: names, packages, UID/App ID, user/system groups, Android user profiles, launch/stop/restart, JDWP, package/APK details, runtime permissions, and confirmed data clearing/uninstallation.
+- frida-server for four Android ABIs, ELF/version validation, installation, root startup and cleanup of the owned process. Gadget/run-as support for debuggable APKs.
+- Four capture modes: HTTP(S) proxy over ADB reverse, Frida OkHttp, Frida Native TLS, and WireGuard VPN. Readiness checks, CA preparation and persistent VPN profiles.
+- HAR import **and export** without a phone, request filters/sorting, separate live detail windows, and cURL for PowerShell 7.3+ and sh/bash/zsh.
+- Request/response bodies: Auto, Text, JSON, HTML text, Image, HEX and Base64; copy, save captured bytes or export rendered text. Partial bodies are explicitly marked.
+- System or app-UID Logcat, buffers/history, Regex/tag/level/PID/TID/UID filters, multiple selection, auto-scroll, and TXT/CSV/JSONL export.
+- Android network/device diagnostics, ADB push/pull and APK installation with separate result windows.
+- Light/dark themes, command palette, cancellation and an operation journal.
 
-Готовые установщики и переносимые архивы: [GitHub Releases](https://github.com/MaiklGureev/DroidDebugHunterByCompose/releases). Выберите Windows x64, macOS Apple Silicon/Intel или Linux x64. Java включена в приложение; инструкция первого запуска находится в релизе и архивах.
+## Run from source
 
-Нужен **JDK 17**; Gradle wrapper включён. JDK 21 можно использовать для запуска Gradle при наличии toolchain 17. В IntelliJ IDEA выберите JDK 17 для проекта и Gradle JVM, затем конфигурацию `desktop`.
+Install **JDK 17**. The Gradle wrapper is included. JDK 21 can run Gradle if toolchain 17 is available. In IntelliJ IDEA, select JDK 17 for the project and Gradle JVM, then run the shared **`desktop`** configuration.
+
+Windows:
 
 ```powershell
 .\run.ps1
-# либо
+# or
 .\run.bat
-```
-
-Скрипт выбирает установленный JDK 17/21, не меняя глобальную настройку Java. Прямой запуск с настроенным `JAVA_HOME`:
-
-```powershell
+# With JAVA_HOME configured:
 .\gradlew.bat run
 ```
 
-Первой сборке нужен доступ к Maven/Gradle. Для HAR, интерфейса и unit-тестов внешние Android/Python-утилиты не требуются.
+The launcher selects an installed JDK 17/21 without changing global Java settings. On macOS/Linux:
 
-На macOS/Linux: `./gradlew run`. На macOS сочетания с ⌘ поддерживаются вместе с Ctrl.
+```sh
+./gradlew run
+```
 
-Gradle-задача `run` запускает отдельную временную копию JAR. Повторная сборка проекта не заменяет классы уже работающего процесса; изменения исходников применяются после перезапуска приложения. В IDEA используйте конфигурацию `desktop`. При запуске `MainKt` напрямую из IDE остановите приложение перед Rebuild/Clean, иначе возможно `NoClassDefFoundError` для ещё не загруженных классов корутин.
+The first build needs Maven/Gradle network access. The UI, HAR analysis and unit tests do not require external Android/Python tools.
 
-## Локальный комплект утилит
+Gradle's `run` task uses a separate temporary JAR copy, so rebuilding does not replace classes in a running process. Restart to apply source changes. Use `desktop` in IDEA. When running `MainKt` directly, stop it before Rebuild/Clean to avoid `NoClassDefFoundError` for coroutine classes that have not yet been loaded.
 
-Большие бинарные файлы **исключены из Git**. По умолчанию комплект берётся из `desktop-resources/<os>-<arch>/tools/` (например, `windows-x64`, `macos-arm64`, `linux-x64`) или из ресурсов готового приложения. Можно выбрать другой каталог и собственные ADB/Python, включая Python из venv. Автопоиск использует Android SDK и PATH. Комплекты с нативными бинарниками подготавливаются отдельно на каждой ОС/CPU.
+## Prepare local tools
 
-Подготовка нового комплекта требует Python 3.14 для целевой ОС/CPU и выполняется явно. Общий скрипт для всех платформ (на Windows используйте `python`, на macOS/Linux — `python3`):
+Large binaries are **excluded from Git**. Bundles normally live in `desktop-resources/<os>-<arch>/tools/`, such as `windows-x64`, `macos-arm64` or `linux-x64`, or in packaged app resources. You can select another directory and individual ADB/Python executables, including a virtual environment. Detection also checks Android SDK and PATH. Settings keep separate paths for each OS/CPU.
+
+Prepare tools explicitly on the **target OS/CPU**, using Python **3.14** (`python` on Windows, `python3` on macOS/Linux):
 
 ```sh
 python3 prepare-tools.py --action init
@@ -54,72 +56,74 @@ python3 prepare-tools.py --action download --component all
 python3 prepare-tools.py --action check
 ```
 
-Windows-обёртка с дополнительной возможностью копирования установленного Python:
+Windows also provides a wrapper:
 
 ```powershell
 .\prepare-tools.ps1 -Action init
 .\prepare-tools.ps1 -Action download -Component all -Python python
 .\prepare-tools.ps1 -Action check
-```
-
-Для переноса уже подготовленного комплекта из предыдущего проекта:
-
-```powershell
+# Reuse an existing Windows bundle:
 .\prepare-tools.ps1 -Source 'D:\FridaDebugTool' -Action check
 ```
 
-Флаг `-CopyPython` дополнительно копирует установленный Python 3.14 x64 в комплект. Для захвата используются зафиксированные версии из `capture-requirements.txt` и `proxy-requirements.txt`. Frida client/server/Gadget должны совпадать: **17.26.2**.
+`-CopyPython` also copies an installed Python 3.14 x64 interpreter. Capture dependencies are pinned in `capture-requirements.txt` and `proxy-requirements.txt`. The Frida client, server and Gadget versions must match: **17.26.2**.
 
-В интерфейсе доступны аналогичные проверка и подготовка утилит. Обычный запуск программы ничего не скачивает. Из старого проекта не копируются настройки, трафик, CA и VPN-ключи.
+The same checks/preparation are available in Settings → Tools (`Настройки → Инструменты`). Normal startup downloads nothing. Settings, traffic, CA certificates and VPN keys are not imported from the old project. See [platform configuration](docs/PLATFORMS.md) and [tool preparation](src/main/resources/runtime/help/DOWNLOADS.en.md).
 
-## Работа с телефоном
+## Connect a phone
 
-1. Включите USB-отладку и подтвердите RSA-ключ компьютера на Android.
-2. Выберите устройство в верхней панели. Обновите приложения, выберите нужное.
-3. На экране «Трафик» выберите режим и откройте настройку захвата значком рядом с запуском.
-4. Выполните автоматические проверки и ручные шаги Android. Запустите захват.
+1. Enable USB debugging and confirm the computer's RSA key on Android.
+2. Select a device in the top bar. Refresh apps and select the target when required.
+3. On Traffic (`Трафик`), choose a capture mode and open its settings beside Start.
+4. Run readiness checks, complete the manual Android steps, then start capture.
 
-Прокси не определяет пакет/UID; VPN указывает пакет по allowlist конфигурации. Для HTTPS через прокси/VPN приложение должно доверять CA. Pinning, недоступные TLS-функции и HTTP/3 могут ограничивать захват. Для Frida без root нужен debuggable APK с доступным `run-as`.
+A regular proxy cannot identify the package/UID. VPN attribution comes from its configured allowlist. HTTPS proxy/VPN capture requires the target app to trust the CA. Pinning, unavailable TLS functions and HTTP/3 can limit capture. Rootless Frida requires a debuggable APK with working `run-as`/JDWP.
 
-Полное руководство встроено в раздел «Справка». HAR можно открыть сразу без Android.
+See the [user guide](src/main/resources/runtime/help/USAGE.en.md) and [Android setup](src/main/resources/runtime/help/ANDROID_SETUP_GUIDE.en.md). Help works offline; HAR analysis is available without Android.
 
-## Клавиатура
+## Keyboard shortcuts
 
-| Действие | Клавиши |
+| Action | Shortcut |
 | --- | --- |
-| Импорт HAR | Ctrl+O |
-| Палитра команд | Ctrl+K |
-| Справка | F1 |
-| Детали запроса/строки Logcat | Enter или двойной щелчок |
-| Несколько строк Logcat | Ctrl/Shift + щелчок |
-| Копировать выбранные строки Logcat | Ctrl+C |
-| Закрыть окно результата/деталей | Esc |
+| Import HAR | Ctrl+O |
+| Command palette | Ctrl+K |
+| Help | F1 |
+| Request/log details | Enter or double-click |
+| Multiple log rows | Ctrl/Shift + click |
+| Copy selected Logcat rows | Ctrl+C |
+| Close detail/result window | Esc |
 
-## Сессии и память
+macOS also supports ⌘ for platform shortcuts.
 
-Переходы между экранами сохраняют захват. При смене/потере устройства потоки останавливаются. Закрытие приложения отменяет собственные операции, завершает процессы, восстанавливает прежний прокси и удаляет принадлежащие сессии ADB forward/reverse. Общий ADB-сервер при выходе не завершается. После отключения телефона или принудительного завершения приложения восстановление Android-настроек может потребоваться вручную.
+## Sessions and storage
 
-Настройки, CA и VPN-ключи хранятся в пользовательском каталоге данных: `%LOCALAPPDATA%\DroidDebugHunterCompose` на Windows, `~/Library/Application Support/DroidDebugHunterCompose` на macOS, `$XDG_DATA_HOME/DroidDebugHunterCompose` либо `~/.local/share/DroidDebugHunterCompose` на Linux. Сброс CA/VPN переносит файлы в резервную папку. Установленные CA и импортированные профили автоматически с телефона не удаляются. Для остановки VPN-туннеля через broadcast требуется Remote control в WireGuard.
+Navigation preserves capture. Changing/losing a device stops its streams. Normal shutdown cancels owned operations/processes, restores the previous proxy and removes owned ADB forwards/reverses. It **does not stop the shared ADB server**. After a disconnect or forced termination, Android settings may need manual restoration.
 
-Помимо ограничения числа записей действуют бюджеты приблизительного объёма: 96 МиБ для HTTP и 64 МиБ для Logcat. Старые записи вытесняются; счётчики видны в интерфейсе. Очередь Logcat ограничена, пропуски при перегрузке учитываются. Regex использует RE2/J: поиск выполняется за линейное время, конструкции lookbehind/backreference не поддерживаются.
+Settings, CA and VPN keys are stored in `%LOCALAPPDATA%\DroidDebugHunterCompose` on Windows, `~/Library/Application Support/DroidDebugHunterCompose` on macOS, or `$XDG_DATA_HOME/DroidDebugHunterCompose` / `~/.local/share/DroidDebugHunterCompose` on Linux. Resetting CA/VPN makes a backup. Installed certificates and imported profiles are not automatically removed from Android. WireGuard Remote control is required for automatic tunnel shutdown by broadcast.
 
-## Проверки и сборка
+Record limits are supplemented by approximate memory budgets of 96 MiB for HTTP and 64 MiB for Logcat. Evictions and overload drops are counted. RE2/J provides linear-time regex filtering without lookbehind/backreferences.
 
-```powershell
-.\run.ps1 -Task test
-.\run.ps1 -Task createDistributable
+## Test and package
+
+```sh
+./gradlew test createDistributable
+python3 -m unittest discover -s scripts -p 'test_*.py'
 ```
 
-Переносимая Windows-папка: `build/compose/binaries-1.1.0/main/app/DroidDebugHunterByCompose/`. Она включает собственный JRE и локальные утилиты, если они подготовлены. Копируйте всю папку вместе с `app/` и `runtime/`. Для MSI: `-Task packageMsi`. Compose-плагин подготавливает WiX; при первой упаковке нужен доступ к его загрузке на GitHub. Для macOS/Linux: `./gradlew test createDistributable`, затем при необходимости `packageDmg`/`packageDeb` на целевой ОС.
+Windows also supports `.\run.ps1 -Task test` and `.\run.ps1 -Task createDistributable`. Native output is under `build/compose/binaries-1.1.0/main/app/`. Copy the complete app directory, including its runtime. Build installers on their target OS with `packageMsi`, `packageDmg` or `packageDeb`. The Compose plugin prepares WiX for MSI; its first download needs GitHub access.
 
-Проверка запуска Windows без системной Java: `./scripts/smoke_windows.ps1 -ApplicationRoot ./build/compose/binaries-1.1.0/main/app/DroidDebugHunterByCompose`. Скрипт отключает пути системной Java для дочернего процесса, проверяет встроенный runtime, выбор устройства и завершение модели приложения. Проверка работает с временными данными и не подключается к Android. На macOS/Linux: `python3 scripts/package_release.py --runtime-check`.
+Check the Windows launcher without system Java:
 
-Тесты проверяют HAR, бинарные тела и частичные данные, cURL в двух shell-форматах, профили ОС/CPU, обнаружение утилит, ADB/UID/разрешения, Logcat, тайм-ауты и отмену процессов. CI настроен на Windows, Ubuntu и macOS: тесты, сборка нативного образа, отчёты и артефакты. Offline-проверки подготовки: `python -m unittest discover -s scripts -p 'test_*.py'`. Полные Frida/VPN-сценарии требуют отдельной проверки на совместимом Android APK.
+```powershell
+.\scripts\smoke_windows.ps1 -ApplicationRoot .\build\compose\binaries-1.1.0\main\app\DroidDebugHunterByCompose
+```
 
-При наличии локального комплекта дополнительно запускается интеграционный тест прокси с HTTP-сервером на loopback: он проверяет бинарные запрос и ответ без обращения к Android или внешнему сайту. Без комплекта этот тест пропускается. Android DEX-помощник поставляется вместе с `AppLabels.java`; для его пересборки используйте `python scripts/build_app_labels.py --sdk <Android-SDK> --java-home <JDK>`.
+On macOS/Linux, use `python3 scripts/package_release.py --runtime-check`. These checks exercise private Java, device selection and model shutdown using temporary data without connecting to Android.
 
-## Участие и публикация
+Tests cover HAR/binary/partial bodies, cURL, platform profiles, tool discovery, ADB/UID/permissions, Logcat, process timeouts and cancellation. CI builds all three OS families, including Intel and Apple Silicon release packages. Full Frida/VPN scenarios need a compatible Android test app. A local proxy integration test runs if the optional tools bundle is available; otherwise it is skipped. Rebuild the Android DEX helper with `python scripts/build_app_labels.py --sdk <Android-SDK> --java-home <JDK>`.
 
-См. [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md), [архитектуру](docs/ARCHITECTURE.md) и [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+## Contribute and license
 
-**Лицензия собственного кода пока не выбрана владельцем.** `LICENSE` будет добавлен отдельно. Сторонние компоненты имеют собственные условия; их бинарные комплекты не входят в исходный Git-репозиторий.
+See [Contributing](CONTRIBUTING.md), [Security](SECURITY.md), [Architecture](docs/ARCHITECTURE.md), and [Release process](docs/RELEASING.md).
+
+The project's own code is licensed under the [MIT License](LICENSE). Third-party components retain their own licenses and notices; see [Third-party notices](THIRD_PARTY_NOTICES.md). Downloaded tool bundles are not committed to this repository.

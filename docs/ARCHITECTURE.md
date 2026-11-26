@@ -1,20 +1,24 @@
-# Архитектура Compose-версии
+# Compose application architecture
 
-- `AppState` — состояние экранов, SupervisorJob + Main, владение сессиями, очередь событий и пакетное обновление UI каждые 100 мс.
-- `Processes` — аргументы ProcessBuilder без промежуточного shell, конкурентное чтение stdout/stderr, ограниченный вывод, тайм-аут и уничтожение собственного дерева процессов при отмене.
-- `Adb` — фиксированные команды, экранирование удалённого shell, проверка текущего Android-профиля и UID, данные приложений и разрешений, ELF/ABI.
-- `CaptureSession` — один клиент Python/Frida, ожидание `ready`, протокол `DDH_HTTP_EVENT:`, собственные ADB forward/reverse, блокировка хранилища CA/VPN.
-- `ProxyLease` — снимок всех пяти системных proxy-настроек, восстановление только если они остались прежними/принадлежащими сессии.
-- `LogcatSession` — поток ADB, проверка возможностей прошивки и UID, перепроверка цели каждые пять секунд, явное завершение при смене профиля.
-- `Models` — неизменяемые модели, импорт/экспорт HAR, точные байты, cURL PowerShell, парсинг/фильтры/экспорт логов.
-- Compose UI — виртуализированные списки, отдельные окна результатов/деталей, общие устройство и приложение, настройки, встроенная справка.
+**English** | [Русский](ARCHITECTURE.ru.md)
 
-UI не выполняет блокирующий ввод-вывод. Длительные команды запускаются на IO; парсинг и фильтры — на Default. Coroutine cancellation освобождает ресурсы, а NonCancellable используется только для ограниченного завершения и восстановления.
+- `AppState`: screen state, SupervisorJob + Main, session ownership, event queues and batched UI updates every 100 ms.
+- `Processes`: ProcessBuilder arguments without an intermediate shell, concurrent bounded stdout/stderr reads, timeouts, and owned process-tree termination/reaping on cancellation.
+- `Adb`: fixed commands, remote-shell escaping, current Android profile/UID checks, app data/permissions and ELF/ABI validation.
+- `CaptureSession`: one Python/Frida client, `ready` handshake, `DDH_HTTP_EVENT:` protocol, owned ADB forwards/reverses and a CA/VPN store lock.
+- `ProxyLease`: snapshots all five system proxy settings and restores them only while they remain unchanged/owned by the session.
+- `LogcatSession`: ADB stream, firmware/UID capability checks, target revalidation every five seconds and termination on profile changes.
+- `Models`: immutable data, HAR import/export, exact body bytes, shell-specific cURL, log parsing/filtering/export.
+- Compose UI: virtualized lists, separate result/detail windows, shared device/app selection, settings and offline help.
 
-Для HTTP применяется backpressure ограниченного Channel; для Logcat — ограниченный Channel с учётом пропусков. Ограничения числа и объёма записей защищают длительные сессии. Запросы обновляются по ID неизменяемыми копиями, поэтому окна деталей получают последующие ответы.
+The UI performs no blocking I/O. Long commands run on IO; parsing/filtering runs on Default. Coroutine cancellation releases resources. NonCancellable is reserved for bounded termination/restoration.
 
-`HostPlatform` определяет ОС/CPU, нативные имена исполняемых файлов и пользовательский каталог данных. `ToolResolver` учитывает индивидуальные пути, локальный комплект, venv, Android SDK и PATH. В настройках пути хранятся в отдельных профилях ОС/CPU; Windows-настройки мигрируют отдельно.
+HTTP uses a bounded Channel with backpressure. Logcat uses a bounded Channel with overload-drop accounting. Record-count and memory budgets protect long sessions. Immutable request updates are indexed by ID so detail windows receive subsequent responses.
 
-Внешние инструменты находятся отдельно от JVM-кода. Встроенные скрипты/справка извлекаются из ресурсов в каталог данных. `compose.application.resources.dir` используется для комплекта в упакованной версии; исходный проект использует `desktop-resources/<os>-<arch>/tools`. Подготовка выполняется общим Python-скриптом на целевой ОС, без PowerShell. Упаковка jpackage включает приватный Java runtime.
+`HostPlatform` detects OS/CPU, executable names and the native data directory. `ToolResolver` checks explicit paths, a local bundle, virtual environments, Android SDK and PATH. Tool paths are saved per OS/CPU, with Windows-specific legacy migration.
 
-Старый WPF-проект не требуется во время запуска. Его Python/JS-агенты и Android DEX-помощник перенесены с исходниками. Независимый процесс захвата остаётся Python, поскольку использует нативные bindings Frida/mitmproxy; управление, события, очистка и пользовательские сценарии реализованы на Kotlin.
+External tools remain separate from JVM code. Bundled scripts/help are extracted into the user data directory. Packaged apps use `compose.application.resources.dir`; source builds use `desktop-resources/<os>-<arch>/tools`. A shared Python script prepares tools on the target OS. jpackage includes a private Java runtime.
+
+Gradle `run` copies the application JAR to a unique temporary directory before starting Java, then removes it after the process exits. Rebuilding `build/libs` cannot invalidate a running process's lazy coroutine classes. `--runtime-check` uses isolated data to exercise device selection/shutdown as well as report Java/platform metadata.
+
+The original WPF project is not needed at runtime. Its Python/JS agents and Android DEX helper were ported with source. Capture runs in a separate Python process because Frida/mitmproxy use native bindings; control, events, cleanup and user workflows are implemented in Kotlin.

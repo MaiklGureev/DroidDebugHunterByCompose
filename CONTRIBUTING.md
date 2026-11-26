@@ -1,17 +1,21 @@
-# Участие в разработке
+# Contributing
 
-Используйте JDK 17 и Gradle wrapper. Перед pull request выполните `./gradlew test` (Windows: `.\run.ps1 -Task test`). Тесты не требуют телефона и Python. Проверки Android-сценариев описывайте отдельно: устройство/API/ABI, режим, debuggable/root и наблюдаемый результат.
+**English** | [Русский](CONTRIBUTING.ru.md)
 
-Блокирующие операции выполняйте на `Dispatchers.IO`, вычисления — на `Dispatchers.Default`, состояние Compose обновляйте на `Dispatchers.Main`. Для процессов используйте `Processes`/`StreamingProcess`; отмена должна завершать только принадлежащие операции процессы. Не добавляйте shell-конкатенацию пользовательского ввода и общий `adb kill-server` в автоматическую очистку.
+Use JDK 17 and the Gradle wrapper. Before a pull request, run `./gradlew test` (Windows: `.\run.ps1 -Task test`). Unit tests do not require a phone or Python; the optional proxy integration test requires local tools. Report Android checks separately: device/API/ABI, capture mode, debuggable/root status and observed results.
 
-Действия приложения привязывайте к serial, Android-профилю и UID. Не подменяйте отсутствующее тело пустым полным телом. Очистка данных и удаление требуют явного подтверждения с контекстом цели.
+Run blocking I/O on `Dispatchers.IO`, computation on `Dispatchers.Default`, and Compose state updates on `Dispatchers.Main`. Use `Processes` / `StreamingProcess` for subprocesses. Cancellation must reap only owned processes. Do not concatenate user input into shell commands or stop the shared ADB server during automatic cleanup.
 
-Изменения сопровождать тестами поведения, если они затрагивают парсинг, экспорт, владение ресурсами или отмену. UI проверяйте на обоих цветовых режимах и при размере окна 1100×720.
+Bind Android operations to the selected serial, user profile and UID. Do not present an unavailable body as a complete empty body. Data clearing and uninstallation require explicit confirmation identifying the target.
 
-Не коммитьте внешние утилиты, APK, дистрибутивы Python, сборки, реальные HAR/Logcat, сертификаты, VPN-профили, приватные ключи, личные пути и локальные IDE-настройки. Примеры должны быть синтетическими; место для них — `examples/`.
+Add behavior tests for parsing, exports, resource ownership and cancellation changes. Check UI changes in both themes and at 1100×720. Prefer the shared `desktop` configuration for development: its temporary JAR remains stable while another build runs.
 
-Перед коммитом выполните `python scripts/check_repository.py` после добавления файлов в индекс. Проверка ищет запрещённые пути, большие файлы и распространённые форматы ключей, выводя только имена файлов. Она дополняет проверку diff вручную.
+Do not commit external tools, APKs, Python distributions, build output, real HAR/Logcat, certificates, VPN profiles, private keys, personal paths or local IDE settings. Put synthetic examples in `examples/`.
 
-При добавлении встроенных агентов/справки обновите перечень командой `python scripts/update_runtime_manifest.py`. Кеши `__pycache__` и `.pyc` не должны попадать в манифест или JVM-ресурсы. Проверяйте платформенные изменения на Windows/macOS/Linux; CI настроен на все три ОС. Пути утилит и нативные Python wheels должны соответствовать ОС/CPU.
+After staging, run `python scripts/check_repository.py`. It checks prohibited paths, large files and common private-key formats, reporting filenames only. Also review the diff manually.
 
-В PR опишите проблему, конечное поведение, выполненные проверки и ограничения. Лицензия собственного кода пока выбирается владельцем; не добавляйте её и не меняйте уведомления сторонних компонентов без согласования.
+When adding agents/help files, run `python scripts/update_runtime_manifest.py`. Interpreter caches (`__pycache__`, `.pyc`) must not enter the manifest or JVM resources. Test platform changes on Windows/macOS/Linux; tools and native Python wheels must match OS/CPU.
+
+English is the default repository language. Keep each English document and its Russian counterpart aligned and link them near the top. Embedded help retains Russian filenames used by the UI and provides `.en.md` counterparts. Update the documentation index and runtime manifest when adding help.
+
+In a PR, describe the problem, resulting behavior, validation and limitations. Contributions to the project's own code are under the [MIT License](LICENSE). Preserve third-party licenses and notices.

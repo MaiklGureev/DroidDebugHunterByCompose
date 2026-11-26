@@ -1,0 +1,88 @@
+# Windows, macOS и Linux
+
+[English](PLATFORMS.md) | **Русский**
+
+Приложение автоматически определяет ОС и CPU. В «Настройки → Инструменты» отображается текущая платформа. Выберите каталог комплекта, исполняемый файл ADB и Python 3.14; Python может находиться в собственном venv. В поля вводится путь к одному исполняемому файлу либо имя команды из PATH, без аргументов и дополнительных кавычек.
+
+## Java для пользователя и разработчика
+
+Готовое нативное приложение включает **собственный Java runtime**. Для запуска на Windows установка системного JDK/JRE **не требуется**. Сохраняйте всю папку сборки, включая `runtime/` и `app/`, рядом с `.exe`; отдельный exe без них не является полной поставкой. macOS `.app` и Linux-папка приложения также включают runtime.
+
+JDK 17 нужен только разработчику для Gradle, тестов и сборки. Команда `gradlew run` запускает исходники и не заменяет готовую нативную поставку.
+
+## Настройки и каталоги
+
+| ОС | Каталог данных | Каталог утилит для сборки |
+| --- | --- | --- |
+| Windows x64 | `%LOCALAPPDATA%\DroidDebugHunterCompose` | `desktop-resources/windows-x64/tools/` |
+| macOS Apple Silicon | `~/Library/Application Support/DroidDebugHunterCompose` | `desktop-resources/macos-arm64/tools/` |
+| macOS Intel | тот же каталог macOS | `desktop-resources/macos-x64/tools/` |
+| Linux x64 | `$XDG_DATA_HOME/DroidDebugHunterCompose` либо `~/.local/share/DroidDebugHunterCompose` | `desktop-resources/linux-x64/tools/` |
+
+Для ARM64 используются соответствующие каталоги `windows-arm64` и `linux-arm64`; наличие совместимых утилит/колёс Python проверяется отдельно. Windows/Linux ARM64 пока не входят в опубликованные релизные цели. В частности, если официальный Linux ADB не соответствует CPU, установите нативный ADB из дистрибутива и укажите его путь.
+
+В упакованном приложении комплект читается из собственных ресурсов `tools/`. Если комплекта нет, можно выбрать любую доступную папку. Пути хранятся в отдельных профилях ОС/CPU; старые Windows-настройки мигрируют только на Windows. Общие настройки интерфейса сохраняются между профилями.
+
+Автопоиск ADB: комплект → `ANDROID_SDK_ROOT`/`ANDROID_HOME` и стандартный Android SDK → PATH. Автопоиск Python: локальный `python/` или `.venv/` → PATH. На macOS проверяются также стандартные каталоги Homebrew. Поля «ADB» и «Python» можно оставить пустыми для автопоиска. Явный путь к venv имеет приоритет.
+
+## Подготовка утилит
+
+Утилиты подготавливаются **на целевой ОС и CPU**. Windows `.exe` и Python wheels нельзя использовать как комплект для macOS/Linux. Android frida-server/Gadget подбираются отдельно по ABI телефона.
+
+В интерфейсе: сохраните пути → выберите компонент → «Проверить комплект» или «Скачать / подготовить». Для загрузок выбирайте папку с правом записи; каталог установленного приложения может быть недоступен для изменения.
+
+macOS / Linux, с установленным Python 3.14:
+
+```sh
+python3 prepare-tools.py --action init
+python3 prepare-tools.py --action download --component all
+python3 prepare-tools.py --action check
+```
+
+Windows:
+
+```powershell
+python prepare-tools.py --action download --component all
+# Либо обёртка для копирования прежнего Windows-комплекта:
+.\prepare-tools.ps1 -Source 'D:\FridaDebugTool' -Action check
+```
+
+Использовать другой каталог: `--root <каталог>`. `--offline` отключает сетевые загрузки. Подготовка устанавливает Python-пакеты через `pip --target` в выбранный каталог. Закреплённые версии рассчитаны на Python 3.14; наличие нативных wheels зависит от ОС/CPU. Ошибки pip показываются в полном выводе подготовки. Отдельные Windows-пакеты имеют платформенные маркеры и не устанавливаются на Unix.
+
+При передаче Android Platform Tools сохраняются библиотеки, уведомления Google и права исполнения на Unix. Если ADB подключён по USB на Linux, доступ определяется настройкой устройства и udev в дистрибутиве; приложение не меняет системные правила автоматически.
+
+## Сборка
+
+Сборка выполняется **на целевой ОС**: Windows не собирает `.app` для macOS. В CI настроены Windows, Ubuntu и macOS runners. Артефакты упаковываются в `.tar.gz`, чтобы сохранять права исполнения Unix; распаковывайте архив целиком.
+
+```sh
+./gradlew test createDistributable
+# macOS:
+./gradlew packageDmg
+# Linux:
+./gradlew packageDeb
+```
+
+Windows:
+
+```powershell
+.\run.ps1 -Task test
+.\run.ps1 -Task createDistributable
+.\run.ps1 -Task packageMsi
+```
+
+Папки результатов: `build/compose/binaries-1.1.0/main/app/`. Утилиты включаются только для ОС/CPU сборки. При отсутствии локального комплекта приложение собирается с HAR-просмотром и возможностью указать внешние утилиты.
+
+Проверка Windows без Java из PATH/JAVA_HOME:
+
+```powershell
+.\scripts\smoke_windows.ps1 -ApplicationRoot .\build\compose\binaries-1.1.0\main\app\DroidDebugHunterByCompose
+```
+
+Проверка запускает нативный exe с недоступными путями системной Java и убеждается, что `java.home` указывает на `runtime/` внутри сборки. Это не требует удаления установленного JDK разработчика.
+
+## Экспорт и клавиатура
+
+cURL по умолчанию генерируется для PowerShell на Windows и POSIX shell на macOS/Linux. В окне деталей на вкладке cURL можно переключить формат вручную. Бинарные тела передаются через временный файл с сохранением точных байтов.
+
+На macOS работают сочетания с ⌘, а также Ctrl: ⌘O — HAR, ⌘K — палитра, ⌘C — выбранные строки Logcat. Готовые образы CI не подписаны; подпись и notarization для публичных релизов настраиваются владельцем отдельно.

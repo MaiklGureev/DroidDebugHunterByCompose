@@ -23,7 +23,10 @@ class ReleasePackagingTest(unittest.TestCase):
         (self.root / 'build.gradle.kts').write_text('version = "1.1.0"\npackageVersion = "1.1.0"\n')
         (self.root / 'docs').mkdir()
         (self.root / 'docs/README-FIRST.md').write_text('First run')
+        (self.root / 'docs/README-FIRST.ru.md').write_text('Russian first run')
         (self.root / 'THIRD_PARTY_NOTICES.md').write_text('Notices')
+        (self.root / 'THIRD_PARTY_NOTICES.ru.md').write_text('Russian notices')
+        (self.root / 'LICENSE').write_text('MIT License')
 
     def tearDown(self):
         assert self.root.resolve().is_relative_to(Path(tempfile.gettempdir()).resolve())
@@ -54,6 +57,9 @@ class ReleasePackagingTest(unittest.TestCase):
             self.assertIn(prefix + 'DroidDebugHunterByCompose.exe', package.namelist())
             self.assertIn(prefix + 'runtime/lib/modules', package.namelist())
             self.assertEqual(package.read(prefix + 'README-FIRST.md'), b'First run')
+            self.assertEqual(package.read(prefix + 'README-FIRST.ru.md'), b'Russian first run')
+            self.assertEqual(package.read(prefix + 'LICENSE'), b'MIT License')
+            self.assertEqual(package.read(prefix + 'THIRD_PARTY_NOTICES.ru.md'), b'Russian notices')
 
     def test_mac_tar_keeps_app_bundle_and_unix_permissions(self):
         root = self.image('macos')
@@ -61,6 +67,9 @@ class ReleasePackagingTest(unittest.TestCase):
         with tarfile.open(archive) as package:
             member = package.getmember('DroidDebugHunter-1.1.0-macos-arm64/DroidDebugHunterByCompose.app/Contents/MacOS/DroidDebugHunterByCompose')
             self.assertEqual(package.extractfile(member).read(), b'synthetic binary')
+            prefix = 'DroidDebugHunter-1.1.0-macos-arm64/'
+            self.assertEqual(package.extractfile(prefix + 'LICENSE').read(), b'MIT License')
+            self.assertEqual(package.extractfile(prefix + 'README-FIRST.ru.md').read(), b'Russian first run')
             if os.name != 'nt':
                 self.assertTrue(member.mode & 0o111)
 
@@ -83,8 +92,9 @@ class ReleasePackagingTest(unittest.TestCase):
         with patch.dict(os.environ, GITHUB_SHA='a' * 40):
             self.module.collect(self.downloads())
         files = list((self.root / 'build/release-assets').iterdir())
-        self.assertEqual(len(files), 15)
-        self.assertEqual(len((self.root / 'build/release-assets/SHA256SUMS.txt').read_text().splitlines()), 14)
+        self.assertEqual(len(files), 18)
+        self.assertEqual(len((self.root / 'build/release-assets/SHA256SUMS.txt').read_text().splitlines()), 17)
+        self.assertEqual((self.root / 'build/release-assets/LICENSE').read_text(), 'MIT License')
 
     def test_corrupted_asset_prevents_publication(self):
         downloads = self.downloads()

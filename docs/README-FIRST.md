@@ -1,17 +1,19 @@
-# DroidDebugHunter — первый запуск
+# DroidDebugHunter — first run
 
-Java уже включена в приложение. Устанавливать JDK/JRE в систему не требуется.
+**English** | [Русский](README-FIRST.ru.md)
 
-- Windows: распакуйте весь ZIP и запустите `DroidDebugHunterByCompose.exe`. Каталоги `app` и `runtime` должны оставаться рядом с exe. Либо используйте MSI.
-- macOS: откройте `.app` из распакованной папки либо перенесите его из DMG в Applications. Архитектура arm64 — для Apple Silicon, x64 — для Intel. Сборка пока без подписи издателя и notarization.
-- Linux x64: запустите `./bin/DroidDebugHunterByCompose` в распакованной папке либо установите DEB. Требуется графическая среда рабочего стола.
+Java is included. You do not need to install a system JDK/JRE.
 
-HAR-просмотр доступен сразу. Файл для знакомства: [examples/sample.har](https://github.com/MaiklGureev/DroidDebugHunterByCompose/blob/v1.1.0/examples/sample.har).
+- **Windows:** extract the entire ZIP and run `DroidDebugHunterByCompose.exe`, keeping `app` and `runtime` beside it. Or install the MSI.
+- **macOS:** open the extracted `.app`, or copy it from DMG to Applications. Choose arm64 for Apple Silicon or x64 for Intel. Builds are unsigned and not notarized.
+- **Linux x64:** run `./bin/DroidDebugHunterByCompose` from the extracted directory, or install the DEB. A graphical desktop is required.
 
-Для работы с телефоном откройте **Настройки → Инструменты** и выберите ADB, Python 3.14 и каталог локального комплекта. Кнопка подготовки скачивает дополнительные компоненты явно. Эти архивы не содержат отдельный Python, ADB, серверы Frida или APK WireGuard.
+HAR analysis works immediately. Try [the synthetic sample](https://github.com/MaiklGureev/DroidDebugHunterByCompose/blob/master/examples/sample.har).
 
-USB-отладку, доверие сертификатам и разрешение VPN подтверждают на Android. Для выбора режима и подготовки используйте значок настройки на экране «Трафик» и встроенную справку.
+For a phone, open Settings → Tools (`Настройки → Инструменты`) and configure ADB, Python 3.14 and the tools directory. Preparation downloads optional components only when requested. Public archives do not include a separate Python interpreter, ADB, Frida servers or WireGuard APK.
 
-Релизы и SHA-256: https://github.com/MaiklGureev/DroidDebugHunterByCompose/releases
+Confirm USB debugging, CA installation/trust and VPN permission on Android. Open capture settings beside Start on Traffic (`Трафик`) and follow the offline Help. English and Russian manuals are included in `runtime/help` inside app resources and extracted into the user data directory. The desktop UI currently uses Russian labels.
 
-См. `THIRD_PARTY_NOTICES.md`. Лицензия собственного кода пока не выбрана владельцем.
+[Releases and SHA-256](https://github.com/MaiklGureev/DroidDebugHunterByCompose/releases).
+
+Project code: MIT; see `LICENSE`. Third-party terms: `THIRD_PARTY_NOTICES.md` / `THIRD_PARTY_NOTICES.ru.md`.

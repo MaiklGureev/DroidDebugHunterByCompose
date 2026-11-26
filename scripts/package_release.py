@@ -65,25 +65,28 @@ def digest(path):
         return hashlib.file_digest(stream, 'sha256').hexdigest()
 
 
+def distribution_documents():
+    return [ROOT / path for path in ('LICENSE', 'docs/README-FIRST.md', 'docs/README-FIRST.ru.md',
+                                    'THIRD_PARTY_NOTICES.md', 'THIRD_PARTY_NOTICES.ru.md')]
+
+
 def portable(root, output, system, arch, ver):
     name = f'DroidDebugHunter-{ver}-{system}-{arch}'
     output.mkdir(parents=True, exist_ok=True)
-    readme = ROOT / 'docs/README-FIRST.md'
-    notices = ROOT / 'THIRD_PARTY_NOTICES.md'
     if system == 'windows':
         archive = output / (name + '.zip')
         with zipfile.ZipFile(archive, 'w', compression=zipfile.ZIP_DEFLATED) as target:
             for path in sorted(root.rglob('*')):
                 if path.is_file():
                     target.write(path, f'{name}/{path.relative_to(root).as_posix()}')
-            target.write(readme, f'{name}/README-FIRST.md')
-            target.write(notices, f'{name}/THIRD_PARTY_NOTICES.md')
+            for document in distribution_documents():
+                target.write(document, f'{name}/{document.name}')
     else:
         archive = output / (name + '.tar.gz')
         with tarfile.open(archive, 'w:gz') as target:
             target.add(root, arcname=f'{name}/{root.name}' if system == 'macos' else name)
-            target.add(readme, arcname=f'{name}/README-FIRST.md')
-            target.add(notices, arcname=f'{name}/THIRD_PARTY_NOTICES.md')
+            for document in distribution_documents():
+                target.add(document, arcname=f'{name}/{document.name}')
     return archive
 
 
@@ -146,8 +149,8 @@ def collect(downloads):
             shutil.copy2(source, output / filename)
         shutil.copy2(path, output / path.name)
         manifests.append(data)
-    shutil.copy2(ROOT / 'docs/README-FIRST.md', output / 'README-FIRST.md')
-    shutil.copy2(ROOT / 'THIRD_PARTY_NOTICES.md', output / 'THIRD_PARTY_NOTICES.md')
+    for document in distribution_documents():
+        shutil.copy2(document, output / document.name)
     paths = sorted(path for path in output.iterdir() if path.is_file() and path.name != 'SHA256SUMS.txt')
     (output / 'SHA256SUMS.txt').write_text(''.join(f'{digest(path)}  {path.name}\n' for path in paths), encoding='utf-8')
     print(f'Complete release verified: {len(manifests)} targets, 8 binary downloads, {len(paths) + 1} total assets')
