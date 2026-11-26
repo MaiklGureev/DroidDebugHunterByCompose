@@ -2,9 +2,9 @@ import java.nio.file.Files
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
 
 plugins {
-    kotlin("jvm")
-    id("org.jetbrains.compose")
-    id("org.jetbrains.kotlin.plugin.compose")
+    alias(libs.plugins.kotlin.jvm)
+    alias(libs.plugins.compose)
+    alias(libs.plugins.kotlin.compose)
 }
 
 group = "ru.gureev"
@@ -19,14 +19,15 @@ repositories {
 
 dependencies {
     implementation(compose.desktop.currentOs)
-    implementation(compose.materialIconsExtended)
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-swing:1.9.0")
-    implementation("com.google.code.gson:gson:2.11.0")
-    implementation("com.google.re2j:re2j:1.7")
-    testImplementation(kotlin("test-junit5"))
-    testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.11.3")
-    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
+    implementation(libs.compose.material.icons.extended)
+    implementation(libs.coroutines.core)
+    implementation(libs.coroutines.swing)
+    implementation(libs.gson)
+    implementation(libs.re2j)
+    implementation(libs.bundles.markdown)
+    testImplementation(libs.kotlin.test.junit5)
+    testRuntimeOnly(libs.junit.engine)
+    testImplementation(libs.coroutines.test)
 }
 
 kotlin { jvmToolchain(17) }
