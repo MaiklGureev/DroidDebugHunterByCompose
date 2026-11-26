@@ -30,6 +30,13 @@ fun checkApplication(): Map<String, Any> {
                     check(model.selectedDevice == device) {
                         "Device selection failed: ${model.error}"
                     }
+                    val markdown =
+                        Markdown.parse(
+                            Markdown.read(File(AppFiles.runtime, "help/ADB_TOOLS.en.md"))
+                        )
+                    check(markdown.blocks.any { it is org.commonmark.ext.gfm.tables.TableBlock }) {
+                        "Packaged Markdown table parser is unavailable"
+                    }
                     repeat(4) {
                         model.changeLanguage(UiLanguage.Russian)
                         check(Page.Settings.label == "Настройки")

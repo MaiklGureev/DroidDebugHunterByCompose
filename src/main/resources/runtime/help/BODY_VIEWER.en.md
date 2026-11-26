@@ -1,4 +1,4 @@
-# Viewing and saving bodies
+# Request and response content
 
 **English** | [Русский](BODY_VIEWER.md)
 

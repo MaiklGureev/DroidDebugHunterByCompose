@@ -10,7 +10,7 @@
 | Android и настройка захвата | [Руководство](../src/main/resources/runtime/help/ANDROID_SETUP_GUIDE.md) | [Guide](../src/main/resources/runtime/help/ANDROID_SETUP_GUIDE.en.md) |
 | ADB-инструменты | [Руководство](../src/main/resources/runtime/help/ADB_TOOLS.md) | [Guide](../src/main/resources/runtime/help/ADB_TOOLS.en.md) |
 | Logcat | [Руководство](../src/main/resources/runtime/help/LOGCAT.md) | [Guide](../src/main/resources/runtime/help/LOGCAT.en.md) |
-| Тела запросов и ответов | [Руководство](../src/main/resources/runtime/help/BODY_VIEWER.md) | [Guide](../src/main/resources/runtime/help/BODY_VIEWER.en.md) |
+| Содержимое запросов и ответов | [Руководство](../src/main/resources/runtime/help/BODY_VIEWER.md) | [Guide](../src/main/resources/runtime/help/BODY_VIEWER.en.md) |
 | Подготовка утилит | [Руководство](../src/main/resources/runtime/help/DOWNLOADS.md) | [Guide](../src/main/resources/runtime/help/DOWNLOADS.en.md) |
 | Windows / macOS / Linux | [Платформы](PLATFORMS.ru.md) | [Platforms](PLATFORMS.md) |
 | Архитектура | [Архитектура](ARCHITECTURE.ru.md) | [Architecture](ARCHITECTURE.md) |

@@ -81,6 +81,12 @@ A regular proxy cannot identify the package/UID. VPN attribution comes from its 
 
 See the [user guide](src/main/resources/runtime/help/USAGE.en.md) and [Android setup](src/main/resources/runtime/help/ANDROID_SETUP_GUIDE.en.md). Help works offline; HAR analysis is available without Android.
 
+## Markdown help
+
+Help renders headings, lists, tables, inline formatting and fenced code with selectable text. Use **Open Markdown** to read a local `.md`/`.markdown` file. Links navigate within the document directory; Back returns to the previous page. HTTP(S) links open in the system browser when clicked. Code blocks have a Copy code button.
+
+Dependency and plugin versions are centralized in [`gradle/libs.versions.toml`](gradle/libs.versions.toml). Compose selects host-specific desktop natives through `currentOs`.
+
 ## Keyboard shortcuts
 
 | Action | Shortcut |

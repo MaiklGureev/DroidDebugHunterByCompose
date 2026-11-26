@@ -10,7 +10,7 @@
 | Android and capture setup | [Guide](../src/main/resources/runtime/help/ANDROID_SETUP_GUIDE.en.md) | [Руководство](../src/main/resources/runtime/help/ANDROID_SETUP_GUIDE.md) |
 | ADB operations | [Guide](../src/main/resources/runtime/help/ADB_TOOLS.en.md) | [Руководство](../src/main/resources/runtime/help/ADB_TOOLS.md) |
 | Logcat | [Guide](../src/main/resources/runtime/help/LOGCAT.en.md) | [Руководство](../src/main/resources/runtime/help/LOGCAT.md) |
-| Request/response bodies | [Guide](../src/main/resources/runtime/help/BODY_VIEWER.en.md) | [Руководство](../src/main/resources/runtime/help/BODY_VIEWER.md) |
+| Request and response content | [Guide](../src/main/resources/runtime/help/BODY_VIEWER.en.md) | [Руководство](../src/main/resources/runtime/help/BODY_VIEWER.md) |
 | Tool preparation | [Guide](../src/main/resources/runtime/help/DOWNLOADS.en.md) | [Руководство](../src/main/resources/runtime/help/DOWNLOADS.md) |
 | Windows / macOS / Linux | [Platforms](PLATFORMS.md) | [Платформы](PLATFORMS.ru.md) |
 | Architecture | [Architecture](ARCHITECTURE.md) | [Архитектура](ARCHITECTURE.ru.md) |

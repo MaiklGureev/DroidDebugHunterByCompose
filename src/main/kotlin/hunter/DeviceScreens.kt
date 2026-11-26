@@ -6,6 +6,7 @@ import androidx.compose.foundation.lazy.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.*
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -16,6 +17,7 @@ import androidx.compose.ui.unit.sp
 import java.io.File
 import javax.swing.JFileChooser
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 @Composable
@@ -741,7 +743,7 @@ fun HelpScreen(model: AppState) {
             tr("Android: complete setup"),
             tr("ADB tools"),
             "Logcat",
-            tr("Body viewer"),
+            tr("Request and response content"),
             tr("Tools and downloads"),
             tr("Third-party components"),
         )
@@ -758,33 +760,75 @@ fun HelpScreen(model: AppState) {
         )
     var topic by remember { mutableStateOf(0) }
     val language = model.settings.language
+    val helpRoot = remember { File(AppFiles.runtime, "help") }
+    var location by remember { mutableStateOf<MarkdownLocation?>(null) }
+    var history by remember { mutableStateOf<List<MarkdownLocation?>>(emptyList()) }
+    val currentLocation =
+        location
+            ?: if (topic == 0) null
+            else MarkdownLocation(File(helpRoot, language.helpFile(files[topic])), helpRoot)
     val text by
-        produceState("", topic, language) {
-            value =
-                withContext(Dispatchers.IO) {
-                    if (topic == 0) ""
-                    else
-                        runCatching {
-                                File(AppFiles.runtime, "help/${language.helpFile(files[topic])}")
-                                    .readText()
-                            }
-                            .getOrDefault(tr("Guide unavailable"))
-                }
+        produceState<Pair<File, Result<String>>?>(null, currentLocation?.file) {
+            value = null
+            currentLocation?.let { document ->
+                value =
+                    document.file to
+                        withContext(Dispatchers.IO) { runCatching { Markdown.read(document.file) } }
+            }
         }
+    fun openDocument(document: MarkdownLocation) {
+        history = history + listOf(currentLocation)
+        location = document
+    }
+    fun followLink(destination: String) {
+        val current = currentLocation ?: return
+        model.scope.launch {
+            try {
+                when (
+                    val target =
+                        withContext(Dispatchers.IO) { resolveMarkdownLink(current, destination) }
+                ) {
+                    is MarkdownTarget.Document -> openDocument(target.location)
+                    is MarkdownTarget.Web ->
+                        withContext(Dispatchers.IO) {
+                            java.awt.Desktop.getDesktop().browse(target.uri)
+                        }
+                    null ->
+                        model.error =
+                            tr("This link is unavailable in the Markdown viewer: {0}", destination)
+                }
+            } catch (e: Exception) {
+                model.error = e.message ?: tr("Guide unavailable")
+            }
+        }
+    }
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            MiniIcon(Icons.AutoMirrored.Outlined.ArrowBack, tr("Back"), history.isNotEmpty()) {
+                location = history.last()
+                history = history.dropLast(1)
+            }
             Choice(
                 topic,
                 topics.indices.toList(),
                 { topics[it] },
-                { topic = it },
-                Modifier.width(290.dp),
+                {
+                    topic = it
+                    location = null
+                    history = emptyList()
+                },
+                Modifier.width(320.dp),
             )
-            Action(tr("Open help folder"), Icons.Outlined.FolderOpen) {
-                openFile(model, File(AppFiles.runtime, "help"))
+            Action(tr("Open Markdown"), Icons.Outlined.FileOpen) {
+                chooseFile(title = tr("Open Markdown"))?.let { file ->
+                    if (isMarkdownFile(file))
+                        openDocument(MarkdownLocation(file, file.absoluteFile.parentFile))
+                    else model.error = tr("Select a Markdown file (.md or .markdown)")
+                }
             }
+            Action(tr("Open help folder"), Icons.Outlined.FolderOpen) { openFile(model, helpRoot) }
         }
-        if (topic == 0)
+        if (currentLocation == null)
             Column(
                 Modifier.verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(14.dp),
@@ -832,6 +876,29 @@ fun HelpScreen(model: AppState) {
                     )
                 }
             }
-        else MonoText(text, Modifier.fillMaxSize())
+        else {
+            val content = text?.takeIf { it.first == currentLocation.file }?.second
+            key(currentLocation.file.absolutePath) {
+                when {
+                    content == null ->
+                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator()
+                        }
+                    content.isFailure ->
+                        Text(
+                            content.exceptionOrNull()?.message ?: tr("Guide unavailable"),
+                            color = MaterialTheme.colors.error,
+                        )
+                    else ->
+                        MarkdownViewer(
+                            source = content.getOrThrow(),
+                            modifier = Modifier.fillMaxSize(),
+                            anchor = currentLocation.anchor,
+                            onLink = ::followLink,
+                            onCopy = { copyText(model, it) },
+                        )
+                }
+            }
+        }
     }
 }
