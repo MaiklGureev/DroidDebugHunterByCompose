@@ -129,6 +129,23 @@ def runtime_check():
         print('Bundled runtime startup verified: ' + data['javaVersion'] + ' / ' + data['platform'])
 
 
+def tool_setup_check():
+    system, arch = host()
+    root = application(system)
+    validate_image(root, system)
+    with tempfile.TemporaryDirectory(prefix='ddhc-tool-setup-native-') as directory:
+        report = Path(directory) / 'setup.json'
+        path = str(Path(os.environ.get('SystemRoot', 'C:/Windows')) / 'System32') if system == 'windows' else '/usr/bin:/bin'
+        environment = dict(os.environ, PATH=path, JAVA_HOME='/nonexistent-java', JRE_HOME='/nonexistent-java', JDK_HOME='/nonexistent-java')
+        subprocess.run([str(launcher(root, system)), '--tool-setup-check', str(report)], env=environment, check=True, timeout=300)
+        data = json.loads(report.read_text(encoding='utf-8'))
+        if Path(data['javaHome']).resolve() != java_home(root, system).resolve() or data['platform'] != f'{system}-{arch}':
+            raise ValueError('Tool setup did not use the native bundled Java runtime')
+        if not data.get('privatePython') or not data.get('downloadProgress'):
+            raise ValueError('Private Python / download progress validation failed')
+        print('Native user-local tool setup verified: Python ' + data['python'] + ', ADB ' + data['adb'] + ' / ' + data['platform'])
+
+
 def collect(downloads):
     output = ROOT / 'build/release-assets'
     output.mkdir(parents=True, exist_ok=True)
@@ -164,6 +181,7 @@ def main():
     parser.add_argument('--platform', choices=['windows', 'macos', 'linux'])
     parser.add_argument('--arch', choices=['x64', 'arm64'])
     parser.add_argument('--runtime-check', action='store_true')
+    parser.add_argument('--tool-setup-check', action='store_true')
     parser.add_argument('--collect', type=Path)
     args = parser.parse_args()
     if args.verify_tag:
@@ -172,6 +190,8 @@ def main():
         print('Release version verified: ' + args.verify_tag)
     elif args.runtime_check:
         runtime_check()
+    elif args.tool_setup_check:
+        tool_setup_check()
     elif args.collect:
         collect(args.collect)
     else:

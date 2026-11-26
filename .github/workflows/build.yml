@@ -35,10 +35,6 @@ jobs:
         run: |
           ./gradlew run --args="--runtime-check build/development-runtime.json" --console=plain
           python -c "import json; d=json.load(open('build/development-runtime.json')); assert d['deviceSelection'] and d['shutdown']; assert '/ddhc-run-' in d['applicationSource'], d"
-      - name: Verify user-local Python and ADB setup without administrator privileges
-        shell: bash
-        timeout-minutes: 6
-        run: ./gradlew run --args="--tool-setup-check build/tool-setup-runtime.json" --console=plain
       - name: Test offline preparation for all hosts
         run: python -m unittest discover -s scripts -p "test_*.py"
       - name: Verify Windows uses its bundled Java runtime

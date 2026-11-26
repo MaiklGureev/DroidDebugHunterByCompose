@@ -83,6 +83,10 @@ jobs:
         if: runner.os != 'Windows'
         shell: bash
         run: python scripts/package_release.py --runtime-check
+      - name: Verify tool setup using bundled Java and private Python
+        shell: bash
+        timeout-minutes: 6
+        run: python scripts/package_release.py --tool-setup-check
       - name: Prepare downloadable release assets
         shell: bash
         env:

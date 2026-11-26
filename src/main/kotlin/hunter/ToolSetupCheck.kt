@@ -32,6 +32,8 @@ fun checkToolSetup(): Map<String, Any> {
             check(File(config.pythonCommand).canonicalFile.toPath().startsWith(directory.toPath()))
             check(reportedBytes)
             mapOf(
+                "javaHome" to System.getProperty("java.home"),
+                "javaVersion" to System.getProperty("java.version"),
                 "platform" to HostPlatform.current.key,
                 "python" to python.actual!!,
                 "adb" to adb.actual!!,
