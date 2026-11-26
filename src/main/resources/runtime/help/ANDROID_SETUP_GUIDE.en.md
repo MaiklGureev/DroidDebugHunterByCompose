@@ -6,9 +6,9 @@ Use devices/apps you are authorized to inspect. Commands target the selected ser
 
 ## 1. Prepare the computer
 
-Native Compose packages include Java. Devices need ADB; live capture needs Python 3.14 and the selected mode's components. In Settings → Tools (`Настройки → Инструменты`), configure paths, apply, prepare components and check the bundle. See [tools](DOWNLOADS.en.md) and [platforms](PLATFORMS.en.md).
+Native Compose packages include Java. Devices need ADB; live capture targets Python 3.14.10 (alternatives are allowed with compatibility warnings) and the selected mode's components. In Settings → Tools (`Настройки → Инструменты`), configure paths, apply, prepare components and check the bundle. See [tools](DOWNLOADS.en.md) and [platforms](PLATFORMS.en.md).
 
-Windows, macOS and Linux need their own ADB/Python/wheels. Android server/Gadget binaries depend on device or app ABI. Frida client/server/Gadget must match version 17.26.2. Normal startup downloads nothing.
+Windows, macOS and Linux need their own ADB/Python/wheels. Android server/Gadget binaries depend on device or app ABI. Frida client/server/Gadget must match each other; the target is 17.26.2, with other matching versions allowed. Normal startup downloads nothing.
 
 ## 2. Connect Android
 
@@ -46,7 +46,7 @@ Hidden/static TLS functions, other processes and HTTP/3 may be unavailable. Unre
 
 ### Rootless Frida: debuggable + Gadget
 
-Use a **debuggable APK** with working `run-as` and JDWP. Prepare Gadget 17.26.2 for the app ABI; a 32-bit app on a 64-bit device may need a different ABI.
+Use a **debuggable APK** with working `run-as` and JDWP. Prepare Gadget matching the active Frida client (target 17.26.2) for the app ABI; a 32-bit app on a 64-bit device may need a different ABI.
 
 Enable Rootless: debuggable + run-as + Gadget (`Без root: debuggable + run-as + Gadget`) and app launch at startup. Frida uses ADB/JDWP and the local Gadget. Arbitrary inaccessible running processes cannot be attached this way without root. Check your APK's debuggable flag and `run-as` if startup is rejected.
 

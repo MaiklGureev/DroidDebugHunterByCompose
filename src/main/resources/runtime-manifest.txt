@@ -34,3 +34,5 @@ runtime/tool-setup/proxy-requirements.txt
 runtime/tool-setup/setup_tools.ps1
 runtime/tool-setup/setup_tools.py
 runtime/tool-setup/tool-catalog.json
+runtime/tool-setup/tool-versions.json
+runtime/tool-setup/tool_support.py

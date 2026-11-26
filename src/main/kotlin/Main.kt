@@ -8,6 +8,11 @@ import java.io.File
 import kotlinx.coroutines.launch
 
 fun main(args: Array<String>) {
+    if (args.firstOrNull() == "--tool-setup-check") {
+        require(args.size == 2) { "Usage: --tool-setup-check <report.json>" }
+        File(args[1]).writeText(json.toJson(checkToolSetup()))
+        return
+    }
     if (args.firstOrNull() == "--runtime-check") {
         require(args.size == 2) { "Usage: --runtime-check <report.json>" }
         File(args[1])

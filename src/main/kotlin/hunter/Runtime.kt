@@ -93,6 +93,7 @@ data class Settings(
     val spawn: Boolean = true,
     val gadget: Boolean = false,
     val language: UiLanguage = UiLanguage.default(),
+    val setup: ToolSetupOptions = ToolSetupOptions(),
 ) {
     val adbCommand
         get() = ToolResolver.adb(adb, File(tools))
@@ -100,13 +101,17 @@ data class Settings(
     val pythonCommand
         get() = ToolResolver.python(python, File(tools))
 
-    fun environment() =
+    fun environment(component: String = "all") =
         mapOf(
             "PYTHONIOENCODING" to "utf-8",
             "PYTHONUNBUFFERED" to "1",
             "NO_COLOR" to "1",
             "PYTHONPATH" to
-                listOf("frida-python", "proxy-python")
+                (when (component) {
+                        "capture" -> listOf("frida-python")
+                        "proxy" -> listOf("proxy-python")
+                        else -> listOf("frida-python", "proxy-python")
+                    })
                     .map { File(tools, it) }
                     .filter(File::isDirectory)
                     .joinToString(File.pathSeparator) { it.absolutePath },
@@ -122,6 +127,19 @@ data class Settings(
             p.setProperty("tools.${platform.key}.root", tools)
             p.setProperty("tools.${platform.key}.adb", adb)
             p.setProperty("tools.${platform.key}.python", python)
+            val setupKey = "tools.${platform.key}.setup."
+            mapOf(
+                    "mode" to setup.mode.name,
+                    "method" to setup.method.name,
+                    "chosen" to setup.chosen.toString(),
+                    "methodChosen" to setup.methodChosen.toString(),
+                    "offline" to setup.offline.toString(),
+                    "cache" to setup.cache,
+                    "adbArchive" to setup.adbArchive,
+                    "uv" to setup.uv,
+                )
+                .forEach { (k, v) -> p.setProperty(setupKey + k, v) }
+            ToolPolicy.ids.forEach { p.setProperty(setupKey + "version." + it, setup.version(it)) }
             mapOf(
                     "dark" to dark,
                     "autoRefresh" to autoRefresh,
@@ -156,9 +174,7 @@ data class Settings(
                 if (legacy) s("python").takeUnless { it in listOf("python", "python.exe") } ?: ""
                 else ""
             return Settings(
-                tools =
-                    storedRoot.takeIf { it.isNotBlank() && File(it).isDirectory }
-                        ?: AppFiles.toolsDefault(),
+                tools = storedRoot.takeIf { it.isNotBlank() } ?: AppFiles.toolsDefault(),
                 adb = s("tools.${platform.key}.adb", if (legacy) s("adb") else ""),
                 python = s("tools.${platform.key}.python", oldPython),
                 dark = s("dark", "true").toBoolean(),
@@ -172,6 +188,27 @@ data class Settings(
                 spawn = s("spawn", "true").toBoolean(),
                 gadget = s("gadget").toBoolean(),
                 language = UiLanguage.fromCode(s("language")),
+                setup =
+                    ToolSetupOptions(
+                        chosen = s("tools.${platform.key}.setup.chosen").toBoolean(),
+                        methodChosen = s("tools.${platform.key}.setup.methodChosen").toBoolean(),
+                        mode =
+                            SetupMode.entries.firstOrNull {
+                                it.name == s("tools.${platform.key}.setup.mode")
+                            } ?: SetupMode.Guided,
+                        method =
+                            SetupMethod.entries.firstOrNull {
+                                it.name == s("tools.${platform.key}.setup.method")
+                            } ?: SetupMethod.Managed,
+                        offline = s("tools.${platform.key}.setup.offline").toBoolean(),
+                        cache = s("tools.${platform.key}.setup.cache"),
+                        adbArchive = s("tools.${platform.key}.setup.adbArchive"),
+                        uv = s("tools.${platform.key}.setup.uv"),
+                        versions =
+                            ToolPolicy.ids.associateWith {
+                                s("tools.${platform.key}.setup.version.$it", ToolPolicy.target(it))
+                            },
+                    ),
             )
         }
     }

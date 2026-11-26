@@ -19,6 +19,7 @@
 | frida-tools 14.13.1 | REPL для OkHttp-агента: [frida-tools](https://github.com/frida/frida-tools) |
 | mitmproxy / mitmproxy_rs | Прокси и WireGuard-сервер: [mitmproxy](https://github.com/mitmproxy/mitmproxy) |
 | WireGuard Android | Опциональный APK: [исходники](https://git.zx2c4.com/wireguard-android/), [загрузки](https://download.wireguard.com/android-client/) |
+| uv / python-build-standalone | Необязательная подготовка локального Python по запросу: [uv](https://github.com/astral-sh/uv), [сборки Python](https://github.com/astral-sh/python-build-standalone); сохраняйте входящие в них лицензии и уведомления Python |
 | Python и Python-пакеты | Локальный runtime и зафиксированные зависимости; `LICENSE.txt`, `*.dist-info` и каталоги лицензий сохраняются в комплекте |
 
 Версии JVM-библиотек закреплены в `gradle/libs.versions.toml`; версии Python-пакетов — в `src/main/resources/runtime/tool-setup/*-requirements.txt`. Их транзитивные зависимости и уведомления входят в фактические пакеты. Полный состав бинарной поставки зависит от подготовленного локального комплекта и выбранного JDK.

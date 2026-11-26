@@ -146,7 +146,10 @@ fun DevicesScreen(model: AppState) {
             }
             Panel(
                 "Frida",
-                tr("Local bundle {0} · server selected by ABI", Adb.FRIDA_VERSION),
+                tr(
+                    "Target Frida {0} · server matches the active client and ABI",
+                    Adb.FRIDA_VERSION,
+                ),
                 Modifier.weight(1f),
             ) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -525,7 +528,6 @@ fun SettingsScreen(model: AppState) {
         remember(model.settings.copy(language = UiLanguage.English, dark = false)) {
             mutableStateOf(model.settings)
         }
-    var component by remember { mutableStateOf("all") }
     val enabled = model.busy.isEmpty() && !model.capturing && !model.logging
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
@@ -610,7 +612,7 @@ fun SettingsScreen(model: AppState) {
                 Field(
                     draft.python,
                     { draft = draft.copy(python = it) },
-                    tr("Python 3.14 (empty = auto)"),
+                    tr("Python executable (empty = auto)"),
                     Modifier.weight(1f),
                     enabled,
                 )
@@ -632,45 +634,7 @@ fun SettingsScreen(model: AppState) {
                 }
             }
             Divider(color = Line)
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Choice(
-                    component,
-                    listOf("all", "adb", "server", "gadget", "capture", "proxy", "wireguard"),
-                    {
-                        when (it) {
-                            "all" -> tr("All tools")
-                            "adb" -> "ADB"
-                            "server" -> "frida-server"
-                            "gadget" -> "Gadget"
-                            "capture" -> "Frida Python"
-                            "proxy" -> "mitmproxy Python"
-                            else -> "WireGuard APK"
-                        }
-                    },
-                    { component = it },
-                    Modifier.width(200.dp),
-                    enabled,
-                )
-                Action(tr("Check bundle"), enabled = enabled) {
-                    model.updateSettings(draft)
-                    model.setupTools(false, component)
-                }
-                Action(tr("Download / prepare"), Icons.Outlined.Download, enabled) {
-                    model.updateSettings(draft)
-                    model.setupTools(true, component)
-                }
-            }
-            Text(
-                tr(
-                    "Preparation uses the internet and Python 3.14 for {0}. Packages are installed in the selected directory without replacing global packages. Choose a writable download directory.",
-                    HostPlatform.current.label,
-                ),
-                color = Muted,
-                fontSize = 11.sp,
-            )
+            ToolSetupPanel(model, draft, { draft = it }, enabled)
         }
         Panel(tr("Behavior and memory"), modifier = Modifier.fillMaxWidth()) {
             Check(tr("Automatically refresh devices every 5 seconds"), draft.autoRefresh, enabled) {

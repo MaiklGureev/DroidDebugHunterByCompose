@@ -12,7 +12,7 @@ Choose English or Русский in Settings → Interface language. The interfa
 
 Analyze HAR immediately: Ctrl+O and choose a file, or try the repository's synthetic sample. No phone, ADB or Python is needed.
 
-For Android, open Settings → Tools (`Настройки → Инструменты`), set ADB, Python 3.14 and the tools directory, Apply (`Применить`) and check tools. Additional downloads run only on request. See [tool preparation](DOWNLOADS.en.md).
+For Android, open Settings → Tools (`Настройки → Инструменты`), set ADB, Python and the tools directory, then choose manual/guided/automatic setup, Apply (`Применить`) and check tools. Additional downloads run only on request. See [tool preparation](DOWNLOADS.en.md).
 
 Enable USB debugging, confirm the RSA key on the phone and select a device in the top bar. Android 11+ also supports Wi-Fi pairing with a six-digit code followed by connection to its separate debugging port. See [Android setup](ANDROID_SETUP_GUIDE.en.md).
 
@@ -33,7 +33,7 @@ On Traffic (`Трафик`), open capture settings beside Start, choose a mode a
 | Frida · Native TLS | Accessible native TLS functions in the selected process. HTTP/1 and HTTP/2; hidden/static functions and HTTP/3 may be unavailable. |
 | VPN · WireGuard | WireGuard, UDP access to the computer, an allowlisted package profile and Android VPN consent. HTTPS requires CA trust. |
 
-Frida client/server/Gadget must share version 17.26.2 and match the relevant ABI. VPN package attribution comes from the profile allowlist, not UID detection from packets. Avoid competing capture sessions for the same device. See [step-by-step setup](ANDROID_SETUP_GUIDE.en.md).
+Frida client/server/Gadget must share the same version (target 17.26.2) and match the relevant ABI; other matching versions are allowed with warnings. VPN package attribution comes from the profile allowlist, not UID detection from packets. Avoid competing capture sessions for the same device. See [step-by-step setup](ANDROID_SETUP_GUIDE.en.md).
 
 ## Inspect requests
 

@@ -21,6 +21,11 @@ Thumbs.db
 /downloads/
 /.venv/
 /venv/
+/.venvs/
+/.bootstrap/
+/python-managed/
+/python-bin/
+/.ddhc-*/
 __pycache__/
 *.py[cod]
 

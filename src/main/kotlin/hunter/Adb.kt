@@ -318,7 +318,8 @@ class Adb(private val settings: Settings) {
     }
 
     companion object {
-        const val FRIDA_VERSION = "17.26.2"
+        val FRIDA_VERSION
+            get() = ToolPolicy.target("frida")
 
         fun quote(value: String) = "'${value.replace("'", "'\\''")}'"
 

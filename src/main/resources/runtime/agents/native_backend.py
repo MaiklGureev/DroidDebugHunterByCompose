@@ -20,7 +20,8 @@ def emit(event):
 
 
 def main(args):
-    if frida.__version__ != '17.26.2': raise RuntimeError('Frida client must be 17.26.2')
+    # Compatibility is checked by imports/connection; alternative Frida versions are allowed.
+    print('Frida client ' + frida.__version__, file=sys.stderr, flush=True)
     if args.device:
         device = frida.get_device_manager().get_device(args.device, timeout=15)
     else:

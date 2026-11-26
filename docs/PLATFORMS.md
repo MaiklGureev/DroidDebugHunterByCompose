@@ -2,7 +2,7 @@
 
 **English** | [Русский](PLATFORMS.ru.md)
 
-The app detects OS/CPU automatically. Settings → Tools (`Настройки → Инструменты`) shows the current platform. Choose a tools directory, ADB and Python 3.14; a virtual-environment interpreter is supported. Enter one executable path or PATH command name, without arguments or extra quotes.
+The app detects OS/CPU automatically. Settings → Tools (`Настройки → Инструменты`) shows the current platform. Choose a tools directory, ADB and Python (target 3.14.10; alternatives allowed); a virtual-environment interpreter is supported. Enter one executable path or PATH command name, without arguments or extra quotes.
 
 ## Java for users and developers
 
@@ -31,7 +31,7 @@ Prepare on the **target OS and CPU**. Windows executables/wheels cannot be reuse
 
 In the app, apply paths, select a component, then Check bundle (`Проверить комплект`) or Download/prepare (`Скачать / подготовить`). Choose a writable directory; the installation directory may be read-only.
 
-macOS/Linux with Python 3.14:
+macOS/Linux with Python (target 3.14.10; alternatives allowed):
 
 ```sh
 python3 prepare-tools.py --action init
@@ -47,7 +47,7 @@ python prepare-tools.py --action download --component all
 .\prepare-tools.ps1 -Source 'D:\FridaDebugTool' -Action check
 ```
 
-Use `--root <directory>` for another location. `--offline` disables network downloads. Preparation uses `pip --target` in the selected bundle. Pinned packages target Python 3.14; native wheel availability depends on OS/CPU. The full preparation output includes pip errors. Platform markers omit Windows-only packages on Unix.
+Use `--root <directory>` for another location. `--offline` disables network downloads. Preparation uses `pip --target` in the selected bundle. The frozen requirements target Python 3.14.10; other Python/package versions use dependency metadata, and native wheel availability depends on OS/CPU. The full preparation output includes pip errors. Platform markers omit Windows-only packages on Unix.
 
 Retain Platform Tools libraries, Google notices and Unix executable permissions. Linux USB access depends on device permissions/udev rules in your distribution; the app does not change them automatically.
 
@@ -86,3 +86,5 @@ On macOS/Linux: `python3 scripts/package_release.py --runtime-check`. These chec
 cURL defaults to PowerShell on Windows and POSIX shell on macOS/Linux. Switch the format in request details. Binary bodies use a temporary file to preserve captured bytes.
 
 macOS supports ⌘ alongside Ctrl: ⌘O for HAR, ⌘K for the command palette, ⌘C for selected log rows. Current builds are unsigned; Apple notarization is not configured.
+
+Setup modes, user-local installation, offline cache and target versions: [tool setup](../src/main/resources/runtime/help/DOWNLOADS.en.md).

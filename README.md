@@ -48,7 +48,9 @@ Gradle's `run` task uses a separate temporary JAR copy, so rebuilding does not r
 
 Large binaries are **excluded from Git**. Bundles normally live in `desktop-resources/<os>-<arch>/tools/`, such as `windows-x64`, `macos-arm64` or `linux-x64`, or in packaged app resources. You can select another directory and individual ADB/Python executables, including a virtual environment. Detection also checks Android SDK and PATH. Settings keep separate paths for each OS/CPU.
 
-Prepare tools explicitly on the **target OS/CPU**, using Python **3.14** (`python` on Windows, `python3` on macOS/Linux):
+Use Settings → Tools to choose **manual, guided or automatic setup**, inspect detected/target versions and select a local installation method. The wizard supports portable Python via uv without a system interpreter or administrator elevation, existing Python/venv, local archives and offline wheelhouses. Downloads show progress and a live log, with cancellation. Components can be prepared separately or as a Frida bundle; individual archives/APKs can be downloaded without installation. Versioned links can be copied, and placement/cache folders opened. Missing directories are created on startup when writable; the guide includes the complete manual folder layout. Other versions are allowed with warnings; see the [version matrix and setup guide](src/main/resources/runtime/help/DOWNLOADS.en.md).
+
+Prepare tools from the CLI on the **target OS/CPU**, using an existing Python **3.11+** (target **3.14.10**, proxy **3.12+**) (`python` on Windows, `python3` on macOS/Linux):
 
 ```sh
 python3 prepare-tools.py --action init
@@ -66,7 +68,7 @@ Windows also provides a wrapper:
 .\prepare-tools.ps1 -Source 'D:\FridaDebugTool' -Action check
 ```
 
-`-CopyPython` also copies an installed Python 3.14 x64 interpreter. Capture dependencies are pinned in `capture-requirements.txt` and `proxy-requirements.txt`. The Frida client, server and Gadget versions must match: **17.26.2**.
+`-CopyPython` copies a full installed 64-bit Python 3.11+ interpreter. Target versions are in `tool-versions.json`; target Python 3.14 dependencies are frozen in the requirements files. Custom versions/interpreters use package metadata for resolution. Frida client/server/Gadget must match each other; the target is **17.26.2**.
 
 The same checks/preparation are available in Settings → Tools (`Настройки → Инструменты`). Normal startup downloads nothing. Settings, traffic, CA certificates and VPN keys are not imported from the old project. See [platform configuration](docs/PLATFORMS.md) and [tool preparation](src/main/resources/runtime/help/DOWNLOADS.en.md).
 

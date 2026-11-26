@@ -157,6 +157,14 @@ class CaptureSession(
     private val ready = CompletableDeferred<Unit>()
 
     suspend fun start() {
+        val relevantTools =
+            setOf("python", "adb") +
+                if (mode == CaptureMode.Proxy || mode == CaptureMode.Vpn)
+                    setOf("mitmproxy", "mitmproxyRs")
+                else setOf("frida", "fridaTools")
+        ToolInspector.inspect(settings)
+            .filter { it.id in relevantTools && it.warning }
+            .forEach { log(it.summary) }
         check(adb.device(serial, "get-state").requireSuccess() == "device") {
             tr("Device unauthorized / unavailable")
         }
@@ -201,20 +209,8 @@ class CaptureSession(
                 }
                 command
             } else {
-                val version =
-                    Processes.run(
-                            listOf(
-                                settings.pythonCommand,
-                                "-c",
-                                "import frida, frida_tools.repl; print(frida.__version__)",
-                            ),
-                            settings.environment(),
-                            15000,
-                        )
-                        .requireSuccess()
-                check(version == Adb.FRIDA_VERSION) {
-                    tr("Frida {0} is required; found {1}", Adb.FRIDA_VERSION, version)
-                }
+                val version = ToolInspector.fridaVersion(settings)
+                if (version != ToolPolicy.target("frida")) log(ToolPolicy.notice("frida", version))
                 var gadget: File? = null
                 val connection: List<String>
                 if (settings.gadget) {
@@ -227,10 +223,7 @@ class CaptureSession(
                     }
                     val arch = adb.architecture(serial, app)
                     gadget =
-                        File(
-                            settings.tools,
-                            "frida-gadget/frida-gadget-${Adb.FRIDA_VERSION}-android-$arch.so",
-                        )
+                        File(settings.tools, "frida-gadget/frida-gadget-$version-android-$arch.so")
                     withContext(Dispatchers.IO) { Adb.validateElf(gadget, arch) }
                     connection = listOf("--device", serial, "--gadget", gadget.absolutePath)
                 } else {
@@ -279,7 +272,13 @@ class CaptureSession(
                         (gadget?.let { listOf("--aux", "gadget=(string)${it.absolutePath}") }
                             ?: emptyList())
             }
-        val owned = StreamingProcess.start(args, settings.environment())
+        val owned =
+            StreamingProcess.start(
+                args,
+                settings.environment(
+                    if (mode == CaptureMode.Proxy || mode == CaptureMode.Vpn) "proxy" else "capture"
+                ),
+            )
         process = owned
         reader =
             scope.launch(Dispatchers.IO) {
@@ -444,7 +443,7 @@ class CaptureSession(
                                 app.packageName,
                             )
                     }
-                    Processes.run(args, settings.environment(), 45000).requireSuccess()
+                    Processes.run(args, settings.environment("proxy"), 45000).requireSuccess()
                 } finally {
                     lock?.close()
                 }

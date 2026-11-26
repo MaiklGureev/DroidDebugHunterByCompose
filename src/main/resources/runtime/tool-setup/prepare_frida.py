@@ -13,15 +13,17 @@ import tempfile
 import urllib.error
 import urllib.request
 
-VERSION = "17.26.2"
+from tool_support import POLICY, version as validate_version, copy_download, copy_unpacked
+
+VERSION = POLICY["frida"]
 ARCHITECTURES = {"arm64": (183, 2), "arm": (40, 1), "x86_64": (62, 2), "x86": (3, 1)}
 ROOT = Path(__file__).resolve().parent.parent
 API = f"https://api.github.com/repos/frida/frida/releases/tags/{VERSION}"
 RELEASE = f"https://github.com/frida/frida/releases/download/{VERSION}/"
 
 
-def filename(arch: str) -> str:
-    return f"frida-server-{VERSION}-android-{arch}"
+def filename(arch: str, version: str = VERSION) -> str:
+    return f"frida-server-{version}-android-{arch}"
 
 
 def sha256(path: Path) -> str:
@@ -35,11 +37,12 @@ def request(url: str):
     }), timeout=30)
 
 
-def download(asset: dict, archives: Path) -> tuple[Path, str]:
+def download(asset: dict, archives: Path, version: str = VERSION) -> tuple[Path, str]:
+    release_url = f"https://github.com/frida/frida/releases/download/{version}/"
     name = asset["name"]
-    if name not in {filename(a) + ".xz" for a in ARCHITECTURES}:
+    if name not in {filename(a, version) + ".xz" for a in ARCHITECTURES}:
         raise ValueError(f"Unexpected asset name: {name}")
-    if asset["browser_download_url"] != RELEASE + name:
+    if asset["browser_download_url"] != release_url + name:
         raise ValueError(f"Unexpected download URL for {name}")
     digest = asset.get("digest", "") or ""
     if not digest.startswith("sha256:") or len(digest) != 71:
@@ -53,7 +56,7 @@ def download(asset: dict, archives: Path) -> tuple[Path, str]:
     try:
         print(f"Downloading: {name}", flush=True)
         with request(asset["browser_download_url"]) as source, partial.open("wb") as destination:
-            shutil.copyfileobj(source, destination)
+            copy_download(source, destination, name)
         if partial.stat().st_size != asset["size"] or sha256(partial) != expected:
             raise ValueError(f"SHA-256 or size mismatch: {name}. Existing files were preserved.")
         os.replace(partial, target)
@@ -64,7 +67,7 @@ def download(asset: dict, archives: Path) -> tuple[Path, str]:
 
 def unpack(archive: Path, destination: Path, arch: str) -> None:
     with lzma.open(archive, "rb") as source, destination.open("wb") as output:
-        shutil.copyfileobj(source, output)
+        copy_unpacked(source, output)
     with destination.open("rb") as output:
         header = output.read(20)
     machine, elf_class = ARCHITECTURES[arch]
@@ -73,17 +76,19 @@ def unpack(archive: Path, destination: Path, arch: str) -> None:
         raise ValueError(f"Invalid Android ELF or wrong architecture: {archive.name}")
 
 
-def prepare(output: Path, archives: Path, unpack_only: bool = False) -> None:
+def prepare(output: Path, archives: Path, unpack_only: bool = False, version: str = VERSION) -> None:
+    validate_version(version)
+    release_url = f"https://github.com/frida/frida/releases/download/{version}/"
     output = output.resolve()
     archives = archives.resolve()
     output.mkdir(parents=True, exist_ok=True)
     archives.mkdir(parents=True, exist_ok=True)
     assets = {}
     if not unpack_only:
-        print(f"Reading official release {VERSION}...", flush=True)
-        with request(API) as response:
+        print(f"Reading official release {version}...", flush=True)
+        with request(f"https://api.github.com/repos/frida/frida/releases/tags/{version}") as response:
             release = json.load(response)
-        if release.get("tag_name") != VERSION:
+        if release.get("tag_name") != version:
             raise ValueError("Unexpected release version")
         assets = {asset["name"]: asset for asset in release["assets"]}
 
@@ -94,7 +99,7 @@ def prepare(output: Path, archives: Path, unpack_only: bool = False) -> None:
     try:
         entries = []
         for arch in ARCHITECTURES:
-            name = filename(arch)
+            name = filename(arch, version)
             if unpack_only:
                 archive = archives / (name + ".xz")
                 if not archive.is_file():
@@ -104,13 +109,13 @@ def prepare(output: Path, archives: Path, unpack_only: bool = False) -> None:
                 asset = assets.get(name + ".xz")
                 if asset is None:
                     raise ValueError(f"Official release is missing {name}.xz")
-                archive, archive_hash = download(asset, archives)
+                archive, archive_hash = download(asset, archives, version)
             unpack(archive, staging_path / name, arch)
             entries.append({"architecture": arch, "file": name, "sha256": sha256(staging_path / name),
                             "archive_sha256": archive_hash, "verified_against_github": not unpack_only,
-                            "source": RELEASE + name + ".xz"})
+                            "source": release_url + name + ".xz"})
             print(f"Prepared: {arch}", flush=True)
-        manifest = {"version": VERSION, "servers": entries}
+        manifest = {"version": version, "servers": entries}
         (staging_path / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
         for entry in entries:
             os.replace(staging_path / entry["file"], output / entry["file"])

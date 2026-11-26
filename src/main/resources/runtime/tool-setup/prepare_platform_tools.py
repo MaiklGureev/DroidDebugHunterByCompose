@@ -10,6 +10,7 @@ import stat
 import tempfile
 import urllib.request
 import zipfile
+from tool_support import POLICY, version as validate_version, copy_download
 
 
 def host_os():
@@ -24,7 +25,9 @@ def binary_matches(data, host):
     return data[:4] in (b'\xca\xfe\xba\xbe', b'\xbe\xba\xfe\xca', b'\xcf\xfa\xed\xfe', b'\xfe\xed\xfa\xcf', b'\xca\xfe\xba\xbf', b'\xbf\xba\xfe\xca')
 
 
-def prepare(output, archive=None, offline=False, cache=None, host=None):
+def prepare(output, archive=None, offline=False, cache=None, host=None, version=None):
+    if version is not None:
+        validate_version(version)
     host = host or host_os()
     if host not in {'windows', 'macos', 'linux'}:
         raise ValueError('Unsupported host: ' + host)
@@ -34,13 +37,13 @@ def prepare(output, archive=None, offline=False, cache=None, host=None):
     if adb.is_file() and (output / 'NOTICE.txt').is_file() and (output / 'source.properties').is_file():
         with adb.open('rb') as source:
             valid = binary_matches(source.read(20), host)
-        if valid:
+        if valid and (version is None or ("Pkg.Revision=" + version) in (output / "source.properties").read_text().replace(" ", "")):
             if host != 'windows':
                 adb.chmod(adb.stat().st_mode | 0o111)
             print('ADB already prepared: ' + str(output))
             return
     suffix = {'windows': 'windows', 'macos': 'darwin', 'linux': 'linux'}[host]
-    url = f'https://dl.google.com/android/repository/platform-tools-latest-{suffix}.zip'
+    url = (f'https://dl.google.com/android/repository/platform-tools_r{version}-' + ('win' if host == 'windows' else suffix) + '.zip') if version else f'https://dl.google.com/android/repository/platform-tools-latest-{suffix}.zip'
     supplied = archive is not None
     archive = Path(archive or cache or output.parent / 'downloads' / f'platform-tools-{host}.zip')
     if not archive.is_file():
@@ -50,7 +53,7 @@ def prepare(output, archive=None, offline=False, cache=None, host=None):
         partial = archive.with_suffix('.part')
         try:
             with urllib.request.urlopen(url, timeout=60) as source, partial.open('wb') as target:
-                shutil.copyfileobj(source, target)
+                copy_download(source, target, archive.name)
             partial.replace(archive)
         finally:
             partial.unlink(missing_ok=True)
@@ -95,6 +98,11 @@ def prepare(output, archive=None, offline=False, cache=None, host=None):
             expected = 183 if platform.machine().lower() in ('arm64', 'aarch64') else 62
             if machine != expected:
                 raise ValueError('Google ADB archive does not match CPU; install native adb and configure its path')
+        if version is not None:
+            import re
+            revision = re.search(r'Pkg.Revision\s*=\s*(\S+)', (stage / 'source.properties').read_text())
+            if not revision or revision.group(1) != version:
+                raise ValueError('Archive version differs from selected version: ' + version)
         output.mkdir(parents=True, exist_ok=True)
         for path in stage.rglob('*'):
             if path.is_file():

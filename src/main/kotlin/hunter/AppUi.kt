@@ -240,7 +240,31 @@ fun HunterApp(model: AppState, closing: Boolean) {
                 ) {
                     if (model.busy.isNotEmpty() || closing) {
                         CircularProgressIndicator(Modifier.size(13.dp), strokeWidth = 2.dp)
-                        Text(if (closing) tr("Closing sessions…") else model.busy, fontSize = 11.sp)
+                        val progress = model.setupProgress
+                        val caption =
+                            if (closing) tr("Closing sessions…")
+                            else
+                                progress?.let {
+                                    it.phase +
+                                        (it.fraction?.let { value ->
+                                            " · ${(value * 100).toInt()}%"
+                                        } ?: "") +
+                                        " · " +
+                                        it.detail
+                                } ?: model.busy
+                        Text(
+                            caption,
+                            fontSize = 11.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f),
+                        )
+                        progress?.fraction?.let {
+                            LinearProgressIndicator(
+                                progress = it,
+                                modifier = Modifier.width(110.dp),
+                            )
+                        }
                     } else {
                         Box(
                             Modifier.size(6.dp)
@@ -258,7 +282,6 @@ fun HunterApp(model: AppState, closing: Boolean) {
                         )
                     }
                     if (model.busy.isNotEmpty()) {
-                        Spacer(Modifier.weight(1f))
                         TextButton(model::cancelOperation, contentPadding = PaddingValues(0.dp)) {
                             Text(tr("Cancel"), fontSize = 11.sp)
                         }

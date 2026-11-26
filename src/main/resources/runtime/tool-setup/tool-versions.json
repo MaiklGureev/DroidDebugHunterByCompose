@@ -1,0 +1,25 @@
+{
+  "verifiedOn": "2026-11-27",
+  "python": "3.14.10",
+  "pythonMinimumProxy": "3.12",
+  "frida": "17.26.2",
+  "fridaTools": "14.13.1",
+  "mitmproxy": "12.3.1",
+  "mitmproxyRs": "0.12.15",
+  "adb": "37.0.3",
+  "wireguard": "1.0.20260315",
+  "uv": "0.13.10",
+  "adbSha256": {
+    "windows": "89d108360a3bf2924d3bea837239edaccc22fd6ff5befd3787c4348a9fe4f09d",
+    "macos": "df21339b9371fef9b19264404338dc686f59a88a1dce634b963da344909001d6",
+    "linux": "214548146cadb2ca3508143d8a1d4be4c59de5bb837253e3ede89ed74cf450d1"
+  },
+  "uvAssets": {
+    "windows-x64": ["uv-x86_64-pc-windows-msvc.zip", "297b3881fe1adfb922becc2c1613202abb41dc83ea5ff43d472aa087ca1f8683"],
+    "windows-arm64": ["uv-aarch64-pc-windows-msvc.zip", "f223bcd3fa010174ffeeb885cc1d5334bb81388640c65baa5b8b42b47017337e"],
+    "macos-arm64": ["uv-aarch64-apple-darwin.tar.gz", "e419bf07533bdbf48795fc793601c834dd79db57a8c49ce8e25cfe3a8639958d"],
+    "macos-x64": ["uv-x86_64-apple-darwin.tar.gz", "153e03197588204c04fc4c81cc4bafbfa4280222a385e4ee36a87aeec0ae63b4"],
+    "linux-x64": ["uv-x86_64-unknown-linux-gnu.tar.gz", "bf65ac1a0af10f92c522d91ac096c7c0a39657647b155577e7836c2cbbb4526c"],
+    "linux-arm64": ["uv-aarch64-unknown-linux-gnu.tar.gz", "14590f644805a6234ffe071154340669e38137f38e60aa9629690119704107d2"]
+  }
+}

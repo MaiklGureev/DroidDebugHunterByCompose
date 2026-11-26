@@ -5,11 +5,13 @@ import io
 import os
 from pathlib import Path
 import tempfile
+import sys
 import unittest
 from unittest.mock import patch
 import zipfile
 
 TOOLS = Path(__file__).resolve().parent.parent / 'src/main/resources/runtime/tool-setup'
+sys.path.insert(0, str(TOOLS))
 
 
 def load(name):

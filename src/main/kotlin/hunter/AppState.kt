@@ -76,6 +76,21 @@ class AppState {
     var modeChecks by mutableStateOf(emptyList<CaptureCheck>())
         private set
 
+    var toolDirectoryWarnings by mutableStateOf(emptyList<String>())
+        private set
+
+    var toolFindings by mutableStateOf(emptyList<ToolFinding>())
+        private set
+
+    var setupProgress by mutableStateOf<SetupProgress?>(null)
+        private set
+
+    var setupLiveLog by mutableStateOf("")
+        private set
+
+    var lastDownloadedToolFile by mutableStateOf<File?>(null)
+        private set
+
     var confirmation by mutableStateOf<Confirmation?>(null)
     val exchanges = mutableStateListOf<Exchange>()
     val logs = mutableStateListOf<LogEntry>()
@@ -124,7 +139,12 @@ class AppState {
     init {
         scope.launch {
             try {
-                withContext(Dispatchers.IO) { AppFiles.extract() }
+                toolDirectoryWarnings =
+                    withContext(Dispatchers.IO) {
+                        AppFiles.extract()
+                        ToolLayout.ensure(File(settings.tools))
+                    }
+                toolDirectoryWarnings.forEach(::report)
                 initialized = true
                 status = tr("Ready. Connect Android or import a HAR file.")
                 refreshDevices(true)
@@ -709,12 +729,15 @@ class AppState {
             val target = serial()
             val adb = Adb(settings)
             val arch = adb.architecture(target)
+            val clientVersion = ToolInspector.fridaVersion(settings)
+            if (clientVersion != ToolPolicy.target("frida"))
+                report(ToolPolicy.notice("frida", clientVersion))
             val server =
                 file
                     ?: fridaFiles().firstOrNull {
-                        it.name == "frida-server-${Adb.FRIDA_VERSION}-android-$arch"
+                        it.name == "frida-server-$clientVersion-android-$arch"
                     }
-                    ?: error(tr("No frida-server {0} for {1}", Adb.FRIDA_VERSION, arch))
+                    ?: error(tr("No frida-server {0} for {1}", clientVersion, arch))
             withContext(Dispatchers.IO) { Adb.validateElf(server, arch) }
             val remote = "/data/local/tmp/ddhc-frida-server"
             check(fridaPid == null) { tr("Stop the frida-server started by this session first") }
@@ -722,8 +745,8 @@ class AppState {
                 .requireSuccess()
             adb.shell(target, "chmod 755 $remote")
             val version = adb.shell(target, "$remote --version")
-            check(version == Adb.FRIDA_VERSION) {
-                tr("Server version is {0}; {1} is required", version, Adb.FRIDA_VERSION)
+            check(version == clientVersion) {
+                tr("Server version is {0}; {1} is required", version, clientVersion)
             }
             status = tr("frida-server {0} ({1}) installed", version, arch)
         }
@@ -733,10 +756,13 @@ class AppState {
             check(fridaPid == null) { tr("This session has already started the server") }
             val target = serial()
             val adb = Adb(settings)
-            check(
-                adb.shell(target, "/data/local/tmp/ddhc-frida-server --version") ==
-                    Adb.FRIDA_VERSION
-            )
+            val clientVersion = ToolInspector.fridaVersion(settings)
+            val serverVersion = adb.shell(target, "/data/local/tmp/ddhc-frida-server --version")
+            check(serverVersion == clientVersion) {
+                tr("Server version is {0}; {1} is required", serverVersion, clientVersion)
+            }
+            if (clientVersion != ToolPolicy.target("frida"))
+                report(ToolPolicy.notice("frida", clientVersion))
             val root = adb.shell(target, "id").contains("uid=0")
             val command =
                 "/data/local/tmp/ddhc-frida-server >/data/local/tmp/ddhc-frida.log 2>&1 & echo \$!"
@@ -776,48 +802,35 @@ class AppState {
             status = tr("Owned frida-server stopped")
         }
 
+    fun initializeToolFolders() =
+        task(tr("Checking tool folders")) {
+            toolDirectoryWarnings =
+                withContext(Dispatchers.IO) { ToolLayout.ensure(File(settings.tools)) }
+            toolDirectoryWarnings.forEach(::report)
+            status =
+                if (toolDirectoryWarnings.isEmpty()) tr("Tool folders are ready")
+                else tr("Some folders could not be created; choose a writable location")
+        }
+
+    fun downloadToolSource(config: Settings, source: ToolSource) =
+        task(tr("Downloading")) {
+            setupProgress = SetupProgress(tr("Downloading"), source.label)
+            try {
+                lastDownloadedToolFile = ToolLayout.download(config, source) { setupProgress = it }
+                status = tr("Downloaded: {0}", lastDownloadedToolFile!!.absolutePath)
+                report(status)
+            } finally {
+                setupProgress = null
+            }
+        }
+
     fun checkTools() =
         task(tr("Checking tools")) {
-            val config = settings
-            val adb =
-                runCatching { Adb(config).run("version").requireSuccess() }
-                    .getOrElse { "ADB: ${it.message}" }
-            val python =
-                runCatching {
-                        Processes.run(
-                                listOf(config.pythonCommand, "--version"),
-                                config.environment(),
-                                10000,
-                            )
-                            .text
-                    }
-                    .getOrElse { "Python: ${it.message}" }
-            val modules =
-                runCatching {
-                        Processes.run(
-                                listOf(
-                                    config.pythonCommand,
-                                    "-c",
-                                    "import frida, mitmproxy, mitmproxy_rs; print('Frida ' + frida.__version__); print('mitmproxy: OK')",
-                                ),
-                                config.environment(),
-                                15000,
-                            )
-                            .text
-                    }
-                    .getOrElse { tr("Modules: {0}", it.message) }
+            toolFindings = ToolInspector.inspect(settings)
             outputs +=
                 OutputWindow(
                     title = tr("Checking tools"),
-                    text =
-                        tr(
-                            "Directory: {0}\n\n{1}\n\n{2}\n\n{3}\n\nfrida-server: {4}",
-                            config.tools,
-                            adb,
-                            python,
-                            modules,
-                            fridaFiles().joinToString { it.name },
-                        ),
+                    text = toolFindings.joinToString("\n\n") { it.summary },
                 )
             status = tr("Check completed")
         }
@@ -854,16 +867,38 @@ class AppState {
                     adb.validateApp(target.serial, app)
                     tr("{0} · UID {1} · profile {2}", app.packageName, app.uid, app.user)
                 }
+            var activeFridaVersion: String? = null
             check(tr("Python engine")) {
                 val code =
                     if (selectedMode == CaptureMode.Proxy || selectedMode == CaptureMode.Vpn)
                         "import mitmproxy, mitmproxy_rs; print('mitmproxy: OK')"
                     else
-                        "import frida, frida_tools.repl; assert frida.__version__ == '${Adb.FRIDA_VERSION}', frida.__version__; print('Frida ' + frida.__version__)"
-                Processes.run(listOf(config.pythonCommand, "-c", code), config.environment(), 15000)
-                    .requireSuccess()
+                        "import frida, frida_tools.repl; " +
+                            (if (selectedMode == CaptureMode.Native) "import h11, hpack; "
+                            else "") +
+                            "print(frida.__version__)"
+                val result =
+                    Processes.run(
+                            listOf(config.pythonCommand, "-c", code),
+                            config.environment(
+                                if (
+                                    selectedMode == CaptureMode.Proxy ||
+                                        selectedMode == CaptureMode.Vpn
+                                )
+                                    "proxy"
+                                else "capture"
+                            ),
+                            15000,
+                        )
+                        .requireSuccess()
+                if (selectedMode == CaptureMode.OkHttp || selectedMode == CaptureMode.Native)
+                    activeFridaVersion = result
+                result
             }
             if (selectedMode == CaptureMode.OkHttp || selectedMode == CaptureMode.Native) {
+                val clientVersion = activeFridaVersion ?: config.setup.version("frida")
+                if (clientVersion != ToolPolicy.target("frida"))
+                    checks += CaptureCheck("Frida", null, ToolPolicy.notice("frida", clientVersion))
                 if (config.gadget)
                     check("Gadget / run-as") {
                         requireNotNull(app)
@@ -874,7 +909,7 @@ class AppState {
                         val file =
                             File(
                                 config.tools,
-                                "frida-gadget/frida-gadget-${Adb.FRIDA_VERSION}-android-$arch.so",
+                                "frida-gadget/frida-gadget-$clientVersion-android-$arch.so",
                             )
                         withContext(Dispatchers.IO) { Adb.validateElf(file, arch) }
                         tr("Gadget {0} found; run-as is available", arch)
@@ -933,32 +968,57 @@ class AppState {
                 else tr("Automatic checks passed; complete the manual Android steps")
         }
 
-    fun setupTools(download: Boolean, component: String) =
-        task(if (download) tr("Preparing tools") else tr("Checking bundle")) {
-            val config = settings
-            val result =
-                Processes.run(
-                    listOf(
-                        config.pythonCommand,
-                        "-u",
-                        File(AppFiles.runtime, "tool-setup/setup_tools.py").absolutePath,
-                        "--action",
-                        if (download) "download" else "check",
-                        "--component",
+    fun setupTools(component: String) =
+        task(tr("Preparing tools")) {
+            check(!capturing && !logging && fridaPid == null) {
+                tr("Stop capture, Logcat and the owned Frida server before preparing tools.")
+            }
+            setupLiveLog = ""
+            setupProgress = SetupProgress(tr("Preparing tools"))
+            val log = StringBuilder()
+            try {
+                val config =
+                    ToolProvisioner.prepare(
+                        settings,
                         component,
-                        "--root",
-                        config.tools,
-                    ),
-                    config.environment(),
-                    if (download) 1200000 else 30000,
-                )
-            outputs +=
-                OutputWindow(
-                    title = tr("Tool setup · exit code {0}", result.code),
-                    text = result.text,
-                )
-            result.requireSuccess()
-            status = tr("Tools: operation completed")
+                        { setupProgress = it },
+                        { line ->
+                            report(line)
+                            synchronized(log) { if (log.length < 200_000) log.appendLine(line) }
+                            // Only the UI coroutine writes the live log; downloads run on IO.
+                            scope.launch(Dispatchers.Main) {
+                                setupLiveLog = (setupLiveLog + line + "\n").takeLast(8000)
+                            }
+                        },
+                    )
+                updateSettings(config)
+                toolFindings = ToolInspector.inspect(config)
+                outputs +=
+                    OutputWindow(
+                        title = tr("Tool setup"),
+                        text =
+                            synchronized(log) { log.toString() } +
+                                "\n" +
+                                toolFindings.joinToString("\n\n") { it.summary },
+                    )
+                status = tr("Tools: operation completed")
+            } catch (e: CancellationException) {
+                outputs +=
+                    OutputWindow(
+                        title = tr("Operation cancelled"),
+                        text = synchronized(log) { log.toString() },
+                    )
+                throw e
+            } catch (e: Exception) {
+                outputs +=
+                    OutputWindow(
+                        title = tr("Tool setup failed"),
+                        text = synchronized(log) { log.toString() } + "\n" + e.message,
+                    )
+                throw e
+            } finally {
+                setupProgress = null
+            }
         }
 
     fun resetCapture() {

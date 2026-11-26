@@ -19,6 +19,7 @@ This document lists component sources and notice locations. The project's own co
 | frida-tools 14.13.1 | OkHttp agent REPL: [frida-tools](https://github.com/frida/frida-tools) |
 | mitmproxy / mitmproxy_rs | Proxy and WireGuard server: [mitmproxy](https://github.com/mitmproxy/mitmproxy) |
 | WireGuard Android | Optional APK: [source](https://git.zx2c4.com/wireguard-android/), [downloads](https://download.wireguard.com/android-client/) |
+| uv / python-build-standalone | Optional user-local Python bootstrap, downloaded on request: [uv](https://github.com/astral-sh/uv), [Python distributions](https://github.com/astral-sh/python-build-standalone); retain their bundled licenses and Python notices |
 | Python and Python packages | Local runtime and pinned dependencies; retain `LICENSE.txt`, `*.dist-info` and license directories in the bundle |
 
 JVM dependency versions are pinned in `gradle/libs.versions.toml`; Python versions are pinned in `src/main/resources/runtime/tool-setup/*-requirements.txt`. Transitive dependencies and notices are part of the actual installed packages. Binary distribution contents depend on the prepared tools bundle and selected JDK.
