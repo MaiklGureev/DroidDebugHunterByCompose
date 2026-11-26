@@ -1,0 +1,122 @@
+[
+  {
+    "id": "adb",
+    "name": "ADB / Platform Tools",
+    "folder": "platform-tools",
+    "description": "Подключение USB/Wi-Fi, Logcat и команды Android.",
+    "instructions": "adb.exe, AdbWinApi.dll и AdbWinUsbApi.dll из одного Windows-архива. Сохраните NOTICE.txt и source.properties.",
+    "files": [
+      "adb.exe",
+      "AdbWinApi.dll",
+      "AdbWinUsbApi.dll",
+      "NOTICE.txt",
+      "source.properties"
+    ],
+    "url": "https://developer.android.com/tools/releases/platform-tools",
+    "preparation": "script"
+  },
+  {
+    "id": "python",
+    "name": "Python 3.14 x64",
+    "folder": "python",
+    "description": "Интерпретатор для Frida, прокси и VPN.",
+    "instructions": "Установите обычный Python 3.14 x64 и укажите python.exe в настройках. Полная локальная установка может находиться в python/python.exe. Embeddable ZIP без настройки путей модулей не подходит.",
+    "files": [
+      "python.exe"
+    ],
+    "url": "https://www.python.org/downloads/release/python-31410/",
+    "preparation": "browser"
+  },
+  {
+    "id": "server",
+    "name": "Frida Server 17.26.2",
+    "folder": "frida-server",
+    "description": "Сервер на Android для обычного сценария с root.",
+    "instructions": "Распакуйте .xz. Сохраните все четыре Android ABI для работы офлайн. Windows devkit не нужен.",
+    "files": [
+      "frida-server-17.26.2-android-arm64",
+      "frida-server-17.26.2-android-arm",
+      "frida-server-17.26.2-android-x86_64",
+      "frida-server-17.26.2-android-x86"
+    ],
+    "url": "https://github.com/frida/frida/releases/tag/17.26.2",
+    "preparation": "script"
+  },
+  {
+    "id": "gadget",
+    "name": "Frida Gadget 17.26.2",
+    "folder": "frida-gadget",
+    "description": "Frida в собственном debuggable-приложении без root.",
+    "instructions": "Нужны распакованные Android .so той же версии, что и Windows-клиент Frida.",
+    "files": [
+      "frida-gadget-17.26.2-android-arm64.so",
+      "frida-gadget-17.26.2-android-arm.so",
+      "frida-gadget-17.26.2-android-x86_64.so",
+      "frida-gadget-17.26.2-android-x86.so"
+    ],
+    "url": "https://github.com/frida/frida/releases/tag/17.26.2",
+    "preparation": "script"
+  },
+  {
+    "id": "capture",
+    "name": "Python-пакеты Frida",
+    "folder": "frida-python",
+    "description": "frida 17.26.2 и frida-tools 14.13.1.",
+    "instructions": "Устанавливаются в эту папку через pip --target из capture-requirements.txt. Для офлайн-установки используйте заранее подготовленный wheelhouse.",
+    "files": [
+      "frida/__init__.py",
+      "frida_tools/__init__.py"
+    ],
+    "url": "https://github.com/frida/frida-python",
+    "preparation": "script"
+  },
+  {
+    "id": "proxy",
+    "name": "Python-пакеты прокси / VPN",
+    "folder": "proxy-python",
+    "description": "mitmproxy 12.3.1, Native TLS-декодер и WireGuard backend.",
+    "instructions": "Используйте proxy-requirements.txt и Python 3.14 x64. Одних исходников с GitHub недостаточно: нужны совместимые Windows wheels.",
+    "files": [
+      "mitmproxy/tools/dump.py",
+      "h11/__init__.py",
+      "hpack/__init__.py"
+    ],
+    "url": "https://github.com/mitmproxy/mitmproxy",
+    "preparation": "script"
+  },
+  {
+    "id": "wireguard",
+    "name": "WireGuard Android",
+    "folder": "android-tools",
+    "description": "APK нужен только для VPN-режима.",
+    "instructions": "Положите официальный com.wireguard.android-1.0.20260315.apk. Установка APK и согласие VPN выполняются отдельно на телефоне.",
+    "files": [
+      "com.wireguard.android-1.0.20260315.apk"
+    ],
+    "url": "https://download.wireguard.com/android-client/",
+    "preparation": "script"
+  },
+  {
+    "id": "templates",
+    "name": "Шаблоны debug APK",
+    "folder": "android-debug",
+    "description": "AndroidManifest и Network Security Config собственного APK.",
+    "instructions": "Поставляются с приложением. Если файлы потеряны, восстановите android-debug из исходников или чистой сборки.",
+    "files": [
+      "AndroidManifest.xml",
+      "network_security_config.xml"
+    ],
+    "url": "https://developer.android.com/privacy-and-security/security-config",
+    "preparation": "builtin"
+  },
+  {
+    "id": "downloads",
+    "name": "Архивы для ручной подготовки",
+    "folder": "downloads",
+    "description": "Локальный кеш скачанных ZIP, .xz и установщиков.",
+    "instructions": "Скрипты используют подпапки adb, frida и wheelhouse. После распаковки рабочие файлы должны лежать в папках компонентов. Не помещайте сюда захваты, CA или ключи.",
+    "files": [],
+    "url": "https://github.com/frida/frida/releases/tag/17.26.2",
+    "preparation": "builtin"
+  }
+]

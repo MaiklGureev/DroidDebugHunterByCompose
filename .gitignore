@@ -1,0 +1,50 @@
+# Build output, caches and machine-specific IDE state
+.gradle/
+.kotlin/
+**/build/
+/out/
+/bin/
+/dist/
+/.idea/
+/.vscode/
+*.iml
+*.ipr
+*.iws
+local.properties
+.DS_Store
+Thumbs.db
+
+# Downloaded tooling is prepared locally, never committed
+/desktop-resources/common/tools/
+/tools-local/
+/downloads/
+/.venv/
+/venv/
+__pycache__/
+*.py[cod]
+
+# Local configuration, captured traffic, certificates and private keys
+.env
+.env.*
+!.env.example
+*.log
+*.har
+!examples/*.har
+*.pem
+*.key
+*.cer
+*.crt
+*.p12
+*.pfx
+*.jks
+*.keystore
+*.conf
+*.jsonl
+/capture/
+/capture-backup-*/
+/runtime/
+/artifacts/
+settings.properties
+
+# The Gradle wrapper is intentionally versioned
+!gradle/wrapper/gradle-wrapper.jar
