@@ -9,10 +9,11 @@ import kotlinx.coroutines.*
 
 object AppFiles {
     val data =
-        File(
-                System.getenv("LOCALAPPDATA") ?: System.getProperty("user.home"),
-                "DroidDebugHunterCompose",
-            )
+        (System.getProperty("droiddebughunter.dataDir")?.let(::File)
+                ?: HostPlatform.current.dataDirectory(
+                    File(System.getProperty("user.home")),
+                    System.getenv(),
+                ))
             .apply { mkdirs() }
     val runtime = File(data, "runtime")
     val capture = File(data, "capture").apply { mkdirs() }
@@ -46,12 +47,13 @@ object AppFiles {
         val candidates =
             listOfNotNull(
                 System.getProperty("compose.application.resources.dir")?.let { File(it, "tools") },
-                File("desktop-resources/common/tools"),
-                File("tools"),
-                File(data, "tools"),
+                File("desktop-resources/${HostPlatform.current.key}/tools"),
+                File("desktop-resources/${HostPlatform.current.os.id}/tools"),
+                File(data, "tools/${HostPlatform.current.key}"),
             )
-        return (candidates.firstOrNull { File(it, "platform-tools/adb.exe").isFile }
-                ?: candidates.last())
+        return (candidates.firstOrNull {
+                File(it, "platform-tools/${HostPlatform.current.executable("adb")}").isFile
+            } ?: candidates.last())
             .absolutePath
     }
 
@@ -79,7 +81,7 @@ object AppFiles {
 data class Settings(
     val tools: String = AppFiles.toolsDefault(),
     val adb: String = "",
-    val python: String = "python",
+    val python: String = "",
     val dark: Boolean = true,
     val autoRefresh: Boolean = true,
     val maxLogs: Int = 20000,
@@ -92,16 +94,10 @@ data class Settings(
     val gadget: Boolean = false,
 ) {
     val adbCommand
-        get() =
-            adb.ifBlank {
-                File(tools, "platform-tools/adb.exe").takeIf { it.isFile }?.absolutePath ?: "adb"
-            }
+        get() = ToolResolver.adb(adb, File(tools))
 
     val pythonCommand
-        get() =
-            if (python in listOf("", "python", "python.exe"))
-                File(tools, "python/python.exe").takeIf { it.isFile }?.absolutePath ?: "python"
-            else python
+        get() = ToolResolver.python(python, File(tools))
 
     fun environment() =
         mapOf(
@@ -109,44 +105,60 @@ data class Settings(
             "PYTHONUNBUFFERED" to "1",
             "NO_COLOR" to "1",
             "PYTHONPATH" to
-                listOf("frida-python", "proxy-python").joinToString(File.pathSeparator) {
-                    File(tools, it).absolutePath
-                },
+                listOf("frida-python", "proxy-python")
+                    .map { File(tools, it) }
+                    .filter(File::isDirectory)
+                    .joinToString(File.pathSeparator) { it.absolutePath },
         )
 
-    fun save() {
-        val p = Properties()
-        mapOf(
-                "tools" to tools,
-                "adb" to adb,
-                "python" to python,
-                "dark" to dark,
-                "autoRefresh" to autoRefresh,
-                "maxLogs" to maxLogs,
-                "maxRequests" to maxRequests,
-                "lastSerial" to lastSerial,
-                "lastPackage" to lastPackage,
-                "vpnHost" to vpnHost,
-                "vpnPort" to vpnPort,
-                "spawn" to spawn,
-                "gadget" to gadget,
-            )
-            .forEach { (k, v) -> p.setProperty(k, v.toString()) }
-        val output = java.io.ByteArrayOutputStream()
-        p.store(output, "DroidDebugHunter Compose")
-        AppFiles.atomicWrite(File(AppFiles.data, "settings.properties"), output.toByteArray())
-    }
+    fun save(
+        file: File = File(AppFiles.data, "settings.properties"),
+        platform: HostPlatform = HostPlatform.current,
+    ) =
+        synchronized(Companion) {
+            val p = Properties()
+            if (file.isFile) file.inputStream().use { p.load(it) }
+            p.setProperty("tools.${platform.key}.root", tools)
+            p.setProperty("tools.${platform.key}.adb", adb)
+            p.setProperty("tools.${platform.key}.python", python)
+            mapOf(
+                    "dark" to dark,
+                    "autoRefresh" to autoRefresh,
+                    "maxLogs" to maxLogs,
+                    "maxRequests" to maxRequests,
+                    "lastSerial" to lastSerial,
+                    "lastPackage" to lastPackage,
+                    "vpnHost" to vpnHost,
+                    "vpnPort" to vpnPort,
+                    "spawn" to spawn,
+                    "gadget" to gadget,
+                )
+                .forEach { (k, v) -> p.setProperty(k, v.toString()) }
+            val output = java.io.ByteArrayOutputStream()
+            p.store(output, "DroidDebugHunter Compose")
+            AppFiles.atomicWrite(file, output.toByteArray())
+        }
 
     companion object {
-        fun load(): Settings {
+        fun load(
+            file: File = File(AppFiles.data, "settings.properties"),
+            platform: HostPlatform = HostPlatform.current,
+        ): Settings {
             val p = Properties()
-            val file = File(AppFiles.data, "settings.properties")
             if (file.isFile) file.inputStream().use { p.load(it) }
             fun s(k: String, d: String = "") = p.getProperty(k, d)
+            val legacy =
+                platform.os == HostOs.Windows && !p.containsKey("tools.${platform.key}.root")
+            val storedRoot = s("tools.${platform.key}.root", if (legacy) s("tools") else "")
+            val oldPython =
+                if (legacy) s("python").takeUnless { it in listOf("python", "python.exe") } ?: ""
+                else ""
             return Settings(
-                tools = s("tools", AppFiles.toolsDefault()),
-                adb = s("adb"),
-                python = s("python", "python"),
+                tools =
+                    storedRoot.takeIf { it.isNotBlank() && File(it).isDirectory }
+                        ?: AppFiles.toolsDefault(),
+                adb = s("tools.${platform.key}.adb", if (legacy) s("adb") else ""),
+                python = s("tools.${platform.key}.python", oldPython),
                 dark = s("dark", "true").toBoolean(),
                 autoRefresh = s("autoRefresh", "true").toBoolean(),
                 maxLogs = s("maxLogs").toIntOrNull()?.coerceIn(1000, 100000) ?: 20000,

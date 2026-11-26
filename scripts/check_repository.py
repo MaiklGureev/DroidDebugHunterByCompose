@@ -24,7 +24,7 @@ def main():
     total = 0
     for name in filter(None, tracked):
         path = ROOT / name
-        if name.startswith(FORBIDDEN_DIRS) or '/__pycache__/' in name:
+        if name.startswith(FORBIDDEN_DIRS) or re.match(r'desktop-resources/[^/]+/tools/', name) or '/__pycache__/' in name:
             problems.append((name, 'local artifact'))
         if path.suffix.lower() in PRIVATE_EXTENSIONS or path.name.startswith('.env') and path.name != '.env.example':
             problems.append((name, 'local or private file type'))

@@ -66,7 +66,8 @@ fun OutputContent(model: AppState, output: OutputWindow) {
 @Composable
 fun ExchangeContent(model: AppState, exchange: Exchange) {
     var tab by remember { mutableStateOf(0) }
-    val curl = remember(exchange) { runCatching { Curl.create(exchange) } }
+    var shell by remember { mutableStateOf(CurlShell.native) }
+    val curl = remember(exchange, shell) { runCatching { Curl.create(exchange, shell) } }
     Surface(color = MaterialTheme.colors.surface) {
         Column(
             Modifier.fillMaxSize()
@@ -163,11 +164,19 @@ fun ExchangeContent(model: AppState, exchange: Exchange) {
                 }
                 2 ->
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Text(
-                            "PowerShell 7.3+ · curl.exe · команда не выполнялась",
-                            fontSize = 12.sp,
-                            color = Muted,
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            Choice(
+                                shell,
+                                CurlShell.entries,
+                                { it.title },
+                                { shell = it },
+                                Modifier.width(210.dp),
+                            )
+                            Text("Команда не выполнялась", fontSize = 12.sp, color = Muted)
+                        }
                         MonoText(
                             curl.getOrElse { it.message ?: "cURL недоступен" },
                             Modifier.fillMaxSize(),

@@ -37,7 +37,8 @@ object ProcessFixture {
 class ProcessTest {
     private fun command(vararg args: String) =
         listOf(
-            File(System.getProperty("java.home"), "bin/java.exe").absolutePath,
+            File(System.getProperty("java.home"), "bin/${HostPlatform.current.executable("java")}")
+                .absolutePath,
             "-Dfile.encoding=UTF-8",
             "-cp",
             System.getProperty("test.runtimeClasspath"),

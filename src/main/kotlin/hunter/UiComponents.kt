@@ -330,7 +330,22 @@ fun copyText(model: AppState, text: String) {
 fun openFile(model: AppState, file: File) {
     try {
         file.takeIf { it.exists() } ?: error("Файл не найден: $file")
-        java.awt.Desktop.getDesktop().open(file)
+        if (
+            java.awt.Desktop.isDesktopSupported() &&
+                java.awt.Desktop.getDesktop().isSupported(java.awt.Desktop.Action.OPEN)
+        ) {
+            java.awt.Desktop.getDesktop().open(file)
+        } else {
+            val command =
+                when (HostPlatform.current.os) {
+                    HostOs.MacOS -> "open"
+                    HostOs.Linux -> "xdg-open"
+                    HostOs.Windows -> error("Открытие файлов недоступно в этом окружении")
+                }
+            model.task("Открытие файла") {
+                Processes.run(listOf(command, file.absolutePath)).requireSuccess()
+            }
+        }
     } catch (e: Exception) {
         model.error = e.message ?: "Не удалось открыть файл"
     }

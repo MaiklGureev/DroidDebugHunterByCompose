@@ -4,6 +4,8 @@ import java.util.Base64
 import kotlin.test.*
 
 class CoreTest {
+    private fun powerShellCurl(e: Exchange) = Curl.create(e, CurlShell.PowerShell)
+
     private fun har(
         request: String =
             """{"method":"GET","url":"https://example.test/путь?q=a","headers":[],"bodySize":0}""",
@@ -57,7 +59,7 @@ class CoreTest {
                 .single()
         assertTrue(e.hasBody)
         assertFalse(e.request.complete)
-        assertFailsWith<IllegalArgumentException> { Curl.create(e) }
+        assertFailsWith<IllegalArgumentException> { powerShellCurl(e) }
     }
 
     @Test
@@ -128,7 +130,7 @@ class CoreTest {
                         Header("Connection", "close"),
                     ),
             )
-        val command = Curl.create(e)
+        val command = powerShellCurl(e)
         assertTrue(command.contains("a''b"))
         assertTrue(command.contains("don''t expand `\$x"))
         assertFalse(command.contains("--header 'Content-Length"))
@@ -139,7 +141,7 @@ class CoreTest {
     fun `cURL uses exact bytes through temporary file`() {
         val body = "тест\r\n'\"`$()"
         val command =
-            Curl.create(
+            powerShellCurl(
                 Exchange(
                     method = "POST",
                     url = "https://example.test",
@@ -155,14 +157,14 @@ class CoreTest {
     @Test
     fun `cURL rejects header injection and RAW`() {
         assertFails {
-            Curl.create(
+            powerShellCurl(
                 Exchange(
                     url = "https://example.test",
                     requestHeaders = listOf(Header("X-A", "a\r\nX-B: c")),
                 )
             )
         }
-        assertFails { Curl.create(Exchange(url = "tls://example.test", raw = true)) }
+        assertFails { powerShellCurl(Exchange(url = "tls://example.test", raw = true)) }
         assertFails { Curl.quote("a\u0000b") }
     }
 

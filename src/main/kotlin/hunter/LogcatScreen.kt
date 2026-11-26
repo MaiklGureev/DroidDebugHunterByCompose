@@ -65,11 +65,11 @@ fun LogcatScreen(model: AppState) {
     Column(
         Modifier.fillMaxSize()
             .onPreviewKeyEvent {
-                ctrl = it.isCtrlPressed
+                ctrl = it.isPlatformShortcutPressed
                 shift = it.isShiftPressed
                 if (
                     it.type == KeyEventType.KeyDown &&
-                        it.isCtrlPressed &&
+                        it.isPlatformShortcutPressed &&
                         it.key == Key.C &&
                         selected.isNotEmpty()
                 ) {

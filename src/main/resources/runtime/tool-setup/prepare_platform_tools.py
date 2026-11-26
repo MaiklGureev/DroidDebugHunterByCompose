@@ -1,60 +1,119 @@
-"""Prepare the ADB files used by the app, preserving Google's notices."""
+"""Prepare host-specific Android Platform Tools, including shared libraries and notices."""
 import argparse
 import hashlib
 import json
-from pathlib import Path
+import os
+from pathlib import Path, PurePosixPath
+import platform
 import shutil
+import stat
+import tempfile
 import urllib.request
 import zipfile
 
-ROOT = Path(__file__).resolve().parent.parent
-URL = 'https://dl.google.com/android/repository/platform-tools-latest-windows.zip'
-FILES = ['adb.exe', 'AdbWinApi.dll', 'AdbWinUsbApi.dll', 'NOTICE.txt', 'source.properties']
+
+def host_os():
+    return {'Windows': 'windows', 'Darwin': 'macos', 'Linux': 'linux'}[platform.system()]
 
 
-def prepare(output, archive=None, offline=False, cache=None):
-    output = output.resolve()
-    if all((output / name).is_file() for name in FILES):
-        print('ADB already prepared: ' + str(output))
-        return
-    if archive is None:
-        archive = cache or ROOT / 'tools' / 'platform-tools-cache' / 'platform-tools-windows.zip'
-        if not archive.exists():
-            if offline:
-                raise FileNotFoundError('No cached Platform Tools ZIP. Pass --archive PATH or prepare online first.')
-            archive.parent.mkdir(parents=True, exist_ok=True)
-            partial = archive.with_suffix('.part')
-            with urllib.request.urlopen(URL, timeout=60) as source, partial.open('wb') as target:
+def binary_matches(data, host):
+    if host == 'windows':
+        return data.startswith(b'MZ')
+    if host == 'linux':
+        return data.startswith(b'\x7fELF')
+    return data[:4] in (b'\xca\xfe\xba\xbe', b'\xbe\xba\xfe\xca', b'\xcf\xfa\xed\xfe', b'\xfe\xed\xfa\xcf', b'\xca\xfe\xba\xbf', b'\xbf\xba\xfe\xca')
+
+
+def prepare(output, archive=None, offline=False, cache=None, host=None):
+    host = host or host_os()
+    if host not in {'windows', 'macos', 'linux'}:
+        raise ValueError('Unsupported host: ' + host)
+    output = Path(output).resolve()
+    executable = 'adb.exe' if host == 'windows' else 'adb'
+    adb = output / executable
+    if adb.is_file() and (output / 'NOTICE.txt').is_file() and (output / 'source.properties').is_file():
+        with adb.open('rb') as source:
+            valid = binary_matches(source.read(20), host)
+        if valid:
+            if host != 'windows':
+                adb.chmod(adb.stat().st_mode | 0o111)
+            print('ADB already prepared: ' + str(output))
+            return
+    suffix = {'windows': 'windows', 'macos': 'darwin', 'linux': 'linux'}[host]
+    url = f'https://dl.google.com/android/repository/platform-tools-latest-{suffix}.zip'
+    supplied = archive is not None
+    archive = Path(archive or cache or output.parent / 'downloads' / f'platform-tools-{host}.zip')
+    if not archive.is_file():
+        if offline or supplied:
+            raise FileNotFoundError('No local Platform Tools ZIP: ' + str(archive))
+        archive.parent.mkdir(parents=True, exist_ok=True)
+        partial = archive.with_suffix('.part')
+        try:
+            with urllib.request.urlopen(url, timeout=60) as source, partial.open('wb') as target:
                 shutil.copyfileobj(source, target)
             partial.replace(archive)
-    with zipfile.ZipFile(archive) as source:
-        # Read only known files, never extract arbitrary ZIP paths.
-        contents = {}
-        for name in FILES:
-            info = source.getinfo('platform-tools/' + name)
-            if info.file_size > 32 * 1024 * 1024:
-                raise ValueError('Unexpected file size: ' + name)
-            contents[name] = source.read(info)
-        for name in FILES[:3]:
-            if not contents[name].startswith(b'MZ'):
-                raise ValueError('Not a Windows executable: ' + name)
-    output.mkdir(parents=True, exist_ok=True)
-    for name, data in contents.items():
-        (output / name).write_bytes(data)
-    with archive.open('rb') as stream:
-        digest = hashlib.file_digest(stream, 'sha256').hexdigest()
-    manifest = {'source': URL if archive.name == 'platform-tools-windows.zip' else 'user-supplied archive',
-                'archive_sha256': digest, 'revision': contents['source.properties'].decode().strip(),
-                'note': 'Digest recorded locally; not compared against a vendor checksum.'}
-    (output / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n', encoding='utf-8')
+        finally:
+            partial.unlink(missing_ok=True)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix='ddhc-adb-', dir=output.parent) as folder:
+        stage = Path(folder)
+        count = 0
+        with zipfile.ZipFile(archive) as source:
+            for info in source.infolist():
+                parts = PurePosixPath(info.filename)
+                if parts.is_absolute() or '..' in parts.parts or '\\' in info.filename:
+                    raise ValueError('Unsafe ZIP path')
+                if not parts.parts or parts.parts[0] != 'platform-tools':
+                    continue
+                if stat.S_ISLNK(info.external_attr >> 16):
+                    raise ValueError('Symlinks are not accepted in Platform Tools ZIP')
+                if info.is_dir():
+                    continue
+                count += info.file_size
+                if info.file_size > 64 * 1024 * 1024 or count > 256 * 1024 * 1024:
+                    raise ValueError('Platform Tools ZIP exceeds size limit')
+                target = stage.joinpath(*parts.parts[1:])
+                if not target.resolve().is_relative_to(stage.resolve()):
+                    raise ValueError('ZIP path escaped staging directory')
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes(source.read(info))
+                if host != 'windows':
+                    mode = (info.external_attr >> 16) & 0o777
+                    target.chmod(mode or (0o755 if target.name in ('adb', 'fastboot') else 0o644))
+        required = [executable, 'NOTICE.txt', 'source.properties']
+        if host == 'windows':
+            required += ['AdbWinApi.dll', 'AdbWinUsbApi.dll']
+        for name in required:
+            if not (stage / name).is_file():
+                raise ValueError('Missing required Platform Tools file: ' + name)
+        with (stage / executable).open('rb') as source:
+            header = source.read(20)
+        if not binary_matches(header, host):
+            raise ValueError('ADB binary does not match ' + host)
+        if host == 'linux':
+            machine = int.from_bytes(header[18:20], 'little')
+            expected = 183 if platform.machine().lower() in ('arm64', 'aarch64') else 62
+            if machine != expected:
+                raise ValueError('Google ADB archive does not match CPU; install native adb and configure its path')
+        output.mkdir(parents=True, exist_ok=True)
+        for path in stage.rglob('*'):
+            if path.is_file():
+                target = output / path.relative_to(stage)
+                target.parent.mkdir(parents=True, exist_ok=True)
+                os.replace(path, target)
+    if host != 'windows':
+        adb.chmod(adb.stat().st_mode | 0o111)
+    with archive.open('rb') as source:
+        digest = hashlib.file_digest(source, 'sha256').hexdigest()
+    (output / 'manifest.json').write_text(json.dumps({'source': 'user-supplied archive' if supplied else url, 'host': host, 'archive_sha256': digest, 'note': 'Local fingerprint; not a vendor signature.'}, indent=2), encoding='utf-8')
     print('ADB ready: ' + str(output))
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--archive', type=Path)
-    parser.add_argument('--output', type=Path, default=ROOT / 'DroidDebugHunter' / 'platform-tools')
+    parser.add_argument('--cache', type=Path)
     parser.add_argument('--offline', action='store_true')
-    parser.add_argument('--cache', type=Path, help='Path to the local ZIP cache.')
     args = parser.parse_args()
     prepare(args.output, args.archive, args.offline, args.cache)

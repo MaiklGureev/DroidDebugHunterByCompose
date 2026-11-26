@@ -20,13 +20,13 @@ import org.junit.jupiter.api.Assumptions.assumeTrue
 class BackendIntegrationTest {
     @Test
     fun `bundled proxy captures exact binary request and response`() = runBlocking {
-        val tools = File("desktop-resources/common/tools").absoluteFile
-        val python = File(tools, "python/python.exe")
+        val tools = File(AppFiles.toolsDefault())
+        val python = ToolResolver.localPython(tools)
         assumeTrue(
-            python.isFile && File(tools, "proxy-python/mitmproxy").isDirectory,
+            python?.isFile == true && File(tools, "proxy-python/mitmproxy").isDirectory,
             "Local capture bundle is optional",
         )
-        val settings = Settings(tools = tools.absolutePath, python = python.absolutePath)
+        val settings = Settings(tools = tools.absolutePath, python = python!!.absolutePath)
         val root = Files.createTempDirectory("ddhc-proxy-test-").toFile()
         val bytes = byteArrayOf(0, 1, 2, 13, 10, -1, -128, 65)
         val server =

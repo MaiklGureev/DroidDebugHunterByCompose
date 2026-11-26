@@ -9,8 +9,12 @@ permissions:
   contents: read
 
 jobs:
-  windows:
-    runs-on: windows-latest
+  native:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -18,12 +22,31 @@ jobs:
           distribution: temurin
           java-version: '17'
       - uses: gradle/actions/setup-gradle@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
       - name: Check source repository contents
         run: python scripts/check_repository.py
       - name: Test source build without Android tools
-        run: ./gradlew.bat test --console=plain
+        shell: bash
+        run: ./gradlew test createDistributable --console=plain
+      - name: Test offline preparation for all hosts
+        run: python -m unittest discover -s scripts -p "test_*.py"
+      - name: Verify Windows uses its bundled Java runtime
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./scripts/smoke_windows.ps1 -ApplicationRoot ./build/compose/binaries-1.1.0/main/app/DroidDebugHunterByCompose
+      - name: Archive native app preserving Unix executable permissions
+        shell: bash
+        run: |
+          mkdir -p build/distributions
+          tar -czf build/distributions/DroidDebugHunter-${{ runner.os }}-${{ runner.arch }}.tar.gz -C build/compose/binaries-1.1.0/main/app .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: app-${{ matrix.os }}
+          path: build/distributions/*.tar.gz
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: test-reports
+          name: test-reports-${{ matrix.os }}
           path: build/reports/tests/test/

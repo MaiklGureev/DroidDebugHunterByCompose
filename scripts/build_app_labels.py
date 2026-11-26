@@ -19,8 +19,9 @@ def main():
     dexers = sorted(args.sdk.glob('build-tools/*/lib/d8.jar'), key=lambda p: p.parent.parent.name)
     if not jars or not dexers:
         parser.error('The SDK must contain an Android platform and Build Tools with d8.jar')
-    java = str(args.java_home / 'bin/java.exe') if args.java_home else 'java'
-    javac = str(args.java_home / 'bin/javac.exe') if args.java_home else 'javac'
+    suffix = '.exe' if os.name == 'nt' else ''
+    java = str(args.java_home / ('bin/java' + suffix)) if args.java_home else 'java'
+    javac = str(args.java_home / ('bin/javac' + suffix)) if args.java_home else 'javac'
     helper = ROOT / 'src/main/resources/runtime/AndroidHelper'
     with tempfile.TemporaryDirectory(prefix='ddh-label-build-') as temp:
         subprocess.run([javac, '-encoding', 'UTF-8', '-source', '8', '-target', '8', '-bootclasspath', str(jars[-1]), '-d', temp, str(helper / 'AppLabels.java')], check=True)

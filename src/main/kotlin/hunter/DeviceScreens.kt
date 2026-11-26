@@ -512,6 +512,12 @@ fun SettingsScreen(model: AppState) {
             "Внешние зависимости работают из локального каталога. Загрузка запускается отдельной командой.",
             Modifier.fillMaxWidth(),
         ) {
+            Text("Платформа: ${HostPlatform.current.label}", color = Accent)
+            Text(
+                "ADB и Python выбираются для этой ОС и CPU. Можно указать файл или команду из PATH; Python может быть из venv.",
+                color = Muted,
+                fontSize = 11.sp,
+            )
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -548,7 +554,9 @@ fun SettingsScreen(model: AppState) {
                     enabled,
                 )
                 Action("Выбрать…", enabled = enabled) {
-                    chooseFile(title = "adb.exe")?.let { draft = draft.copy(adb = it.absolutePath) }
+                    chooseFile(title = HostPlatform.current.executable("adb"))?.let {
+                        draft = draft.copy(adb = it.absolutePath)
+                    }
                 }
             }
             Row(
@@ -558,14 +566,15 @@ fun SettingsScreen(model: AppState) {
                 Field(
                     draft.python,
                     { draft = draft.copy(python = it) },
-                    "Python 3.14 x64",
+                    "Python 3.14 (пусто = автоматически)",
                     Modifier.weight(1f),
                     enabled,
                 )
                 Action("Выбрать…", enabled = enabled) {
-                    chooseFile(title = "python.exe")?.let {
-                        draft = draft.copy(python = it.absolutePath)
-                    }
+                    chooseFile(
+                            title = HostPlatform.current.executable(HostPlatform.current.pythonName)
+                        )
+                        ?.let { draft = draft.copy(python = it.absolutePath) }
                 }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -611,7 +620,7 @@ fun SettingsScreen(model: AppState) {
                 }
             }
             Text(
-                "Подготовка использует интернет и Python 3.14 x64, устанавливает пакеты в каталог комплекта. Глобальные Python-пакеты не заменяются.",
+                "Подготовка использует интернет и Python 3.14 для ${HostPlatform.current.label}. Пакеты устанавливаются в выбранный каталог; глобальные пакеты не заменяются. Для загрузок выберите папку с правом записи.",
                 color = Muted,
                 fontSize = 11.sp,
             )
@@ -685,6 +694,7 @@ fun HelpScreen(model: AppState) {
     val topics =
         listOf(
             "Быстрый старт",
+            "Windows / macOS / Linux",
             "Android: полная настройка",
             "ADB-инструменты",
             "Logcat",
@@ -695,6 +705,7 @@ fun HelpScreen(model: AppState) {
     val files =
         listOf(
             "",
+            "PLATFORMS.md",
             "ANDROID_SETUP_GUIDE.md",
             "ADB_TOOLS.md",
             "LOGCAT.md",

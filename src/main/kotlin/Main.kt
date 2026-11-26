@@ -4,9 +4,28 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.*
 import hunter.*
 import java.awt.Dimension
+import java.io.File
 import kotlinx.coroutines.launch
 
-fun main() = application {
+fun main(args: Array<String>) {
+    if (args.firstOrNull() == "--runtime-check") {
+        require(args.size == 2) { "Usage: --runtime-check <report.json>" }
+        File(args[1])
+            .writeText(
+                json.toJson(
+                    mapOf(
+                        "javaHome" to System.getProperty("java.home"),
+                        "javaVersion" to System.getProperty("java.version"),
+                        "platform" to HostPlatform.current.key,
+                    )
+                )
+            )
+        return
+    }
+    launchHunter()
+}
+
+private fun launchHunter() = application {
     val model = remember { AppState() }
     var closing by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
@@ -34,11 +53,11 @@ fun main() = application {
                         model.page = Page.Help
                         true
                     }
-                    event.isCtrlPressed && event.key == Key.K -> {
+                    event.isPlatformShortcutPressed && event.key == Key.K -> {
                         model.palette = !model.palette
                         true
                     }
-                    event.isCtrlPressed && event.key == Key.O -> {
+                    event.isPlatformShortcutPressed && event.key == Key.O -> {
                         chooseFile(title = "Импорт HAR")?.let(model::importHar)
                         true
                     }

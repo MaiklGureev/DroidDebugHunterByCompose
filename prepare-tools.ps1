@@ -6,7 +6,7 @@ param(
     [switch]$CopyPython
 )
 $ErrorActionPreference = 'Stop'
-$target = Join-Path $PSScriptRoot 'desktop-resources\common\tools'
+$target = Join-Path $PSScriptRoot 'desktop-resources\windows-x64\tools'
 New-Item -ItemType Directory -Path $target -Force | Out-Null
 if ($Source) {
     $sourceRoot = (Resolve-Path -LiteralPath $Source).Path
@@ -28,4 +28,6 @@ if ($CopyPython) {
     }
     $Python = Join-Path $pythonTarget 'python.exe'
 }
-& (Join-Path $PSScriptRoot 'src\main\resources\runtime\tool-setup\setup_tools.ps1') -Action $Action -Component $Component -ToolsRoot $target -Python $Python -NoOpen
+if ($Python -in @('python', 'python.exe') -and (Test-Path -LiteralPath (Join-Path $target 'python\python.exe'))) { $Python = Join-Path $target 'python\python.exe' }
+& $Python (Join-Path $PSScriptRoot 'src\main\resources\runtime\tool-setup\setup_tools.py') --root $target --action $Action --component $Component
+if ($LASTEXITCODE -ne 0) { throw 'Tool preparation failed.' }

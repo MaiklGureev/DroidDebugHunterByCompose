@@ -8,7 +8,7 @@ plugins {
 
 group = "ru.gureev"
 
-version = "1.0.0"
+version = "1.1.0"
 
 repositories {
     mavenCentral()
@@ -35,17 +35,43 @@ tasks.test {
     systemProperty("test.runtimeClasspath", sourceSets.test.get().runtimeClasspath.asPath)
 }
 
+tasks.named<org.gradle.language.jvm.tasks.ProcessResources>("processResources") {
+    exclude("**/__pycache__/**", "**/*.pyc", "**/*.pyo")
+}
+
 compose.desktop {
     application {
         mainClass = "MainKt"
         jvmArgs += listOf("-Dfile.encoding=UTF-8", "-Xmx2048m")
 
         nativeDistributions {
+            outputBaseDir.set(layout.buildDirectory.dir("compose/binaries-${project.version}"))
             appResourcesRootDir.set(layout.projectDirectory.dir("desktop-resources"))
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
             packageName = "DroidDebugHunterByCompose"
-            packageVersion = "1.0.0"
+            packageVersion = "1.1.0"
+            description = "Android debugging and traffic inspection"
+            vendor = "DroidDebugHunter"
             modules("java.desktop", "java.net.http", "java.prefs", "jdk.unsupported")
         }
     }
 }
+
+// Native resources must retain execution permissions after the staging copy on Unix hosts.
+tasks
+    .matching { it.name == "prepareAppResources" }
+    .configureEach {
+        doLast {
+            if (!System.getProperty("os.name").startsWith("Windows", true)) {
+                outputs.files.asFileTree
+                    .matching {
+                        include(
+                            "**/tools/platform-tools/adb",
+                            "**/tools/platform-tools/fastboot",
+                            "**/tools/python/bin/python*",
+                        )
+                    }
+                    .forEach { it.setExecutable(true, false) }
+            }
+        }
+    }

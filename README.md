@@ -2,7 +2,9 @@
 
 Desktop-приложение на **Kotlin + Compose Desktop + coroutines** для Android: устройства и ADB, управление Frida, анализ HTTP(S) и потоковый Logcat. Перенос функциональности [DroidDebugHunter](https://github.com/MaiklGureev/DroidDebugHunter) с WPF на Compose.
 
-Основная платформа — **Windows x64**. Интерфейс, модели, ADB, работа с процессами, HAR и Logcat написаны на Kotlin. Существующие Python/JS-движки Frida и mitmproxy включены в исходники; .NET/WPF для запуска не нужны. Другие ОС пока не проверены: подготовка утилит и их локальный комплект ориентированы на Windows.
+Настройка и нативная сборка предусмотрены для **Windows, macOS и Linux**. ОС/CPU определяются автоматически; пути к ADB и Python сохраняются отдельно для каждой платформы. Интерфейс, ADB, HAR и Logcat написаны на Kotlin; Python/JS-движки Frida и mitmproxy включены в исходники. См. [настройку платформ](docs/PLATFORMS.md).
+
+**Готовая Windows-сборка запускается без установленного JDK/JRE:** Java runtime включён в папку приложения. JDK 17 требуется только для разработки и сборки из исходников. macOS/Linux-поставки также содержат собственный runtime; их нужно собирать на соответствующей ОС.
 
 ## Возможности
 
@@ -10,7 +12,7 @@ Desktop-приложение на **Kotlin + Compose Desktop + coroutines** дл
 - Приложения: названия, пакеты, UID/App ID, сторонние/системные, Android-профили, запуск/остановка/перезапуск, JDWP, сведения и APK-пути, runtime-разрешения, очистка данных и удаление с подтверждением.
 - frida-server: каталог четырёх ABI, проверка ELF и версии, установка, запуск с root и остановка собственного процесса. Для debuggable APK — сценарий Gadget/run-as.
 - Четыре режима захвата: HTTP(S)-прокси через ADB reverse, Frida OkHttp, Frida Native TLS, VPN WireGuard. Пошаговая настройка, проверка готовности, CA и сохранённые VPN-профили.
-- Импорт **и экспорт HAR** без телефона, фильтры запросов, сортировка, отдельные окна деталей с живыми обновлениями, cURL для PowerShell 7.3+.
+- Импорт **и экспорт HAR** без телефона, фильтры запросов, сортировка, отдельные окна деталей с живыми обновлениями, cURL для PowerShell 7.3+ и sh/bash/zsh.
 - Тела: Auto, Text, JSON, HTML-текст, Image, HEX, Base64. Копирование текста/изображения, сохранение точных исходных байтов и текста просмотра. Частичные тела отмечаются явно.
 - Logcat: система или выбранный UID, буферы/история, фильтры Regex/tag/уровень/PID/TID/UID, несколько выбранных строк, автопрокрутка, отдельные окна, TXT/CSV/JSONL из снимка.
 - Сеть и диагностика Android, ADB push/pull, установка APK, отдельные окна результатов.
@@ -34,11 +36,21 @@ Desktop-приложение на **Kotlin + Compose Desktop + coroutines** дл
 
 Первой сборке нужен доступ к Maven/Gradle. Для HAR, интерфейса и unit-тестов внешние Android/Python-утилиты не требуются.
 
+На macOS/Linux: `./gradlew run`. На macOS сочетания с ⌘ поддерживаются вместе с Ctrl.
+
 ## Локальный комплект утилит
 
-Большие бинарные файлы **исключены из Git**. По умолчанию приложение ищет их в `desktop-resources/common/tools/`. Можно выбрать другой каталог, adb.exe и Python в настройках. ADB также может находиться в PATH.
+Большие бинарные файлы **исключены из Git**. По умолчанию комплект берётся из `desktop-resources/<os>-<arch>/tools/` (например, `windows-x64`, `macos-arm64`, `linux-x64`) или из ресурсов готового приложения. Можно выбрать другой каталог и собственные ADB/Python, включая Python из venv. Автопоиск использует Android SDK и PATH. Комплекты с нативными бинарниками подготавливаются отдельно на каждой ОС/CPU.
 
-Подготовка нового комплекта требует Python 3.14 x64 и выполняется явно:
+Подготовка нового комплекта требует Python 3.14 для целевой ОС/CPU и выполняется явно. Общий скрипт для всех платформ (на Windows используйте `python`, на macOS/Linux — `python3`):
+
+```sh
+python3 prepare-tools.py --action init
+python3 prepare-tools.py --action download --component all
+python3 prepare-tools.py --action check
+```
+
+Windows-обёртка с дополнительной возможностью копирования установленного Python:
 
 ```powershell
 .\prepare-tools.ps1 -Action init
@@ -83,7 +95,7 @@ Desktop-приложение на **Kotlin + Compose Desktop + coroutines** дл
 
 Переходы между экранами сохраняют захват. При смене/потере устройства потоки останавливаются. Закрытие приложения отменяет собственные операции, завершает процессы, восстанавливает прежний прокси и удаляет принадлежащие сессии ADB forward/reverse. Общий ADB-сервер при выходе не завершается. После отключения телефона или принудительного завершения приложения восстановление Android-настроек может потребоваться вручную.
 
-Настройки, CA и VPN-ключи хранятся в `%LOCALAPPDATA%\DroidDebugHunterCompose`. Сброс CA/VPN переносит файлы в резервную папку. Установленные CA и импортированные профили автоматически с телефона не удаляются. Для остановки VPN-туннеля через broadcast требуется Remote control в WireGuard.
+Настройки, CA и VPN-ключи хранятся в пользовательском каталоге данных: `%LOCALAPPDATA%\DroidDebugHunterCompose` на Windows, `~/Library/Application Support/DroidDebugHunterCompose` на macOS, `$XDG_DATA_HOME/DroidDebugHunterCompose` либо `~/.local/share/DroidDebugHunterCompose` на Linux. Сброс CA/VPN переносит файлы в резервную папку. Установленные CA и импортированные профили автоматически с телефона не удаляются. Для остановки VPN-туннеля через broadcast требуется Remote control в WireGuard.
 
 Помимо ограничения числа записей действуют бюджеты приблизительного объёма: 96 МиБ для HTTP и 64 МиБ для Logcat. Старые записи вытесняются; счётчики видны в интерфейсе. Очередь Logcat ограничена, пропуски при перегрузке учитываются. Regex использует RE2/J: поиск выполняется за линейное время, конструкции lookbehind/backreference не поддерживаются.
 
@@ -94,9 +106,11 @@ Desktop-приложение на **Kotlin + Compose Desktop + coroutines** дл
 .\run.ps1 -Task createDistributable
 ```
 
-Переносимая папка: `build/compose/binaries/main/app/DroidDebugHunterByCompose/`. Она включает JRE и содержимое локального комплекта утилит, если он подготовлен. Для MSI: `-Task packageMsi`. Compose-плагин подготавливает WiX; при первой упаковке нужен доступ к его загрузке на GitHub.
+Переносимая Windows-папка: `build/compose/binaries-1.1.0/main/app/DroidDebugHunterByCompose/`. Она включает собственный JRE и локальные утилиты, если они подготовлены. Копируйте всю папку вместе с `app/` и `runtime/`. Для MSI: `-Task packageMsi`. Compose-плагин подготавливает WiX; при первой упаковке нужен доступ к его загрузке на GitHub. Для macOS/Linux: `./gradlew test createDistributable`, затем при необходимости `packageDmg`/`packageDeb` на целевой ОС.
 
-Тесты проверяют HAR, бинарные тела и частичные данные, cURL, разбор ADB/UID/разрешений, фильтры/экспорт Logcat, протокол захвата, тайм-ауты и отмену процессов. CI собирает исходники и выполняет тесты без телефона. Полные Frida/VPN-сценарии требуют отдельной проверки на совместимом Android APK.
+Проверка запуска Windows без системной Java: `./scripts/smoke_windows.ps1 -ApplicationRoot ./build/compose/binaries-1.1.0/main/app/DroidDebugHunterByCompose`. Скрипт отключает пути системной Java для дочернего процесса и проверяет, что launcher использует встроенный runtime.
+
+Тесты проверяют HAR, бинарные тела и частичные данные, cURL в двух shell-форматах, профили ОС/CPU, обнаружение утилит, ADB/UID/разрешения, Logcat, тайм-ауты и отмену процессов. CI настроен на Windows, Ubuntu и macOS: тесты, сборка нативного образа, отчёты и артефакты. Offline-проверки подготовки: `python -m unittest discover -s scripts -p 'test_*.py'`. Полные Frida/VPN-сценарии требуют отдельной проверки на совместимом Android APK.
 
 При наличии локального комплекта дополнительно запускается интеграционный тест прокси с HTTP-сервером на loopback: он проверяет бинарные запрос и ответ без обращения к Android или внешнему сайту. Без комплекта этот тест пропускается. Android DEX-помощник поставляется вместе с `AppLabels.java`; для его пересборки используйте `python scripts/build_app_labels.py --sdk <Android-SDK> --java-home <JDK>`.
 

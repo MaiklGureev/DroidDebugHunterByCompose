@@ -160,13 +160,28 @@ data class Exchange(
     }
 }
 
+enum class CurlShell(val title: String) {
+    PowerShell("PowerShell 7.3+"),
+    Posix("sh / bash / zsh");
+
+    companion object {
+        val native
+            get() = if (HostPlatform.current.os == HostOs.Windows) PowerShell else Posix
+    }
+}
+
 object Curl {
     fun quote(value: String): String {
         require('\u0000' !in value) { "Аргумент содержит NUL" }
         return "'${value.replace("'", "''")}'"
     }
 
-    fun create(e: Exchange): String {
+    fun quotePosix(value: String): String {
+        require('\u0000' !in value) { "Аргумент содержит NUL" }
+        return "'${value.replace("'", "'\\''")}'"
+    }
+
+    fun create(e: Exchange, shell: CurlShell = CurlShell.native): String {
         require(
             !e.raw &&
                 runCatching { URI(e.url).scheme in listOf("http", "https") }.getOrDefault(false)
@@ -177,14 +192,15 @@ object Curl {
         require(e.request.complete) {
             "Тело запроса захвачено частично: точное повторение недоступно"
         }
+        val quoteArg = if (shell == CurlShell.PowerShell) ::quote else ::quotePosix
         val args =
             mutableListOf(
-                "curl.exe",
+                if (shell == CurlShell.PowerShell) "curl.exe" else "curl",
                 "--globoff",
                 "--request",
-                quote(e.method),
+                quoteArg(e.method),
                 "--url",
-                quote(e.url),
+                quoteArg(e.url),
             )
         for (h in e.requestHeaders) {
             if (h.name.startsWith(":")) continue
@@ -193,7 +209,16 @@ object Curl {
             }
             if (h.name.lowercase() in listOf("content-length", "transfer-encoding", "connection"))
                 continue
-            args += listOf("--header", quote("${h.name}: ${h.value}"))
+            args += listOf("--header", quoteArg("${h.name}: ${h.value}"))
+        }
+        if (shell == CurlShell.Posix) {
+            if (e.request.data.isNotEmpty()) {
+                val octal =
+                    e.request.bytes().joinToString("") { "\\0%03o".format(it.toInt() and 255) }
+                return "(\nddh_file=\$(mktemp) || exit 1\ntrap 'rm -f \"\$ddh_file\"' 0\nprintf '%b' ${quotePosix(octal)} > \"\$ddh_file\"\n${args.joinToString(" ")} --data-binary \"@\$ddh_file\"\n)"
+            }
+            if (e.hasBody) args += listOf("--data-raw", "''")
+            return args.joinToString(" ")
         }
         val prelude =
             "if (\$PSVersionTable.PSVersion -lt [Version]'7.3') { throw 'Use PowerShell 7.3+' }\n\$PSNativeCommandArgumentPassing = 'Standard'\n"

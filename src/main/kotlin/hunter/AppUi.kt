@@ -50,11 +50,11 @@ fun HunterApp(model: AppState, closing: Boolean) {
                                 model.page = Page.Help
                                 true
                             }
-                            event.isCtrlPressed && event.key == Key.K -> {
+                            event.isPlatformShortcutPressed && event.key == Key.K -> {
                                 model.palette = !model.palette
                                 true
                             }
-                            event.isCtrlPressed && event.key == Key.O -> {
+                            event.isPlatformShortcutPressed && event.key == Key.O -> {
                                 chooseFile(title = "Импорт HAR")?.let(model::importHar)
                                 true
                             }
