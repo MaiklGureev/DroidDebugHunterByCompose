@@ -40,6 +40,8 @@ Desktop-приложение на **Kotlin + Compose Desktop + coroutines** дл
 
 На macOS/Linux: `./gradlew run`. На macOS сочетания с ⌘ поддерживаются вместе с Ctrl.
 
+Gradle-задача `run` запускает отдельную временную копию JAR. Повторная сборка проекта не заменяет классы уже работающего процесса; изменения исходников применяются после перезапуска приложения. В IDEA используйте конфигурацию `desktop`. При запуске `MainKt` напрямую из IDE остановите приложение перед Rebuild/Clean, иначе возможно `NoClassDefFoundError` для ещё не загруженных классов корутин.
+
 ## Локальный комплект утилит
 
 Большие бинарные файлы **исключены из Git**. По умолчанию комплект берётся из `desktop-resources/<os>-<arch>/tools/` (например, `windows-x64`, `macos-arm64`, `linux-x64`) или из ресурсов готового приложения. Можно выбрать другой каталог и собственные ADB/Python, включая Python из venv. Автопоиск использует Android SDK и PATH. Комплекты с нативными бинарниками подготавливаются отдельно на каждой ОС/CPU.
@@ -110,7 +112,7 @@ Windows-обёртка с дополнительной возможностью 
 
 Переносимая Windows-папка: `build/compose/binaries-1.1.0/main/app/DroidDebugHunterByCompose/`. Она включает собственный JRE и локальные утилиты, если они подготовлены. Копируйте всю папку вместе с `app/` и `runtime/`. Для MSI: `-Task packageMsi`. Compose-плагин подготавливает WiX; при первой упаковке нужен доступ к его загрузке на GitHub. Для macOS/Linux: `./gradlew test createDistributable`, затем при необходимости `packageDmg`/`packageDeb` на целевой ОС.
 
-Проверка запуска Windows без системной Java: `./scripts/smoke_windows.ps1 -ApplicationRoot ./build/compose/binaries-1.1.0/main/app/DroidDebugHunterByCompose`. Скрипт отключает пути системной Java для дочернего процесса и проверяет, что launcher использует встроенный runtime.
+Проверка запуска Windows без системной Java: `./scripts/smoke_windows.ps1 -ApplicationRoot ./build/compose/binaries-1.1.0/main/app/DroidDebugHunterByCompose`. Скрипт отключает пути системной Java для дочернего процесса, проверяет встроенный runtime, выбор устройства и завершение модели приложения. Проверка работает с временными данными и не подключается к Android. На macOS/Linux: `python3 scripts/package_release.py --runtime-check`.
 
 Тесты проверяют HAR, бинарные тела и частичные данные, cURL в двух shell-форматах, профили ОС/CPU, обнаружение утилит, ADB/UID/разрешения, Logcat, тайм-ауты и отмену процессов. CI настроен на Windows, Ubuntu и macOS: тесты, сборка нативного образа, отчёты и артефакты. Offline-проверки подготовки: `python -m unittest discover -s scripts -p 'test_*.py'`. Полные Frida/VPN-сценарии требуют отдельной проверки на совместимом Android APK.
 

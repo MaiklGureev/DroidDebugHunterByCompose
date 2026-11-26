@@ -17,7 +17,7 @@ fun main(args: Array<String>) {
                         "javaHome" to System.getProperty("java.home"),
                         "javaVersion" to System.getProperty("java.version"),
                         "platform" to HostPlatform.current.key,
-                    )
+                    ) + checkApplication()
                 )
             )
         return

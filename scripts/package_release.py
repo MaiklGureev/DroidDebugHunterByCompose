@@ -119,6 +119,8 @@ def runtime_check():
         data = json.loads(report.read_text(encoding='utf-8'))
         if Path(data['javaHome']).resolve() != java_home(root, system).resolve() or data['platform'] != f'{system}-{arch}':
             raise ValueError('Native launcher used an unexpected runtime or platform')
+        if data.get('deviceSelection') is not True or data.get('shutdown') is not True:
+            raise ValueError('Packaged application selection/shutdown check failed')
         print('Bundled runtime startup verified: ' + data['javaVersion'] + ' / ' + data['platform'])
 
 

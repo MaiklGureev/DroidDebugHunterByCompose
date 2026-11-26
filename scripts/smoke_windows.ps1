@@ -24,7 +24,9 @@ try {
     $javaHome = [IO.Path]::GetFullPath($runtime.javaHome)
     $expected = [IO.Path]::GetFullPath((Join-Path $root 'runtime'))
     if (!$javaHome.Equals($expected, [StringComparison]::OrdinalIgnoreCase)) { throw 'Launcher used a runtime outside the application folder' }
+    if ($runtime.deviceSelection -ne $true -or $runtime.shutdown -ne $true) { throw 'Application selection/shutdown check did not pass' }
     Write-Output ('PASS: Java ' + $runtime.javaVersion + ' from bundled runtime; system Java paths disabled.')
+    Write-Output 'PASS: packaged application selects a device and shuts down on the Swing dispatcher.'
 } finally {
     $env:PATH = $previousPath
     $env:JAVA_HOME = $previousJava

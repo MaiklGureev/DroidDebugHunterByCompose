@@ -1,9 +1,11 @@
 package hunter
 
 import java.io.File
+import java.nio.file.Path
 import java.util.concurrent.TimeUnit
 import kotlin.test.*
 import kotlinx.coroutines.*
+import org.junit.jupiter.api.io.TempDir
 
 object ProcessFixture {
     @JvmStatic
@@ -35,6 +37,39 @@ object ProcessFixture {
 }
 
 class ProcessTest {
+    @Test
+    fun `runtime check selects a device and shuts down without touching user data`(
+        @TempDir directory: Path
+    ) = runBlocking {
+        val sentinel =
+            directory.resolve("settings.properties").toFile().apply { writeText("sentinel") }
+        val report = directory.resolve("report.json").toFile()
+        val result =
+            Processes.run(
+                listOf(
+                    File(
+                            System.getProperty("java.home"),
+                            "bin/${HostPlatform.current.executable("java")}",
+                        )
+                        .absolutePath,
+                    "-Djava.awt.headless=true",
+                    "-Ddroiddebughunter.dataDir=${directory.toAbsolutePath()}",
+                    "-cp",
+                    System.getProperty("test.runtimeClasspath"),
+                    "MainKt",
+                    "--runtime-check",
+                    report.absolutePath,
+                ),
+                timeoutMs = 30000,
+            )
+        assertEquals(0, result.code, result.text)
+        val data = parseObject(report.readText())
+        assertTrue(data.flag("deviceSelection"))
+        assertTrue(data.flag("shutdown"))
+        assertTrue(data.text("applicationSource").isNotBlank())
+        assertEquals("sentinel", sentinel.readText())
+    }
+
     private fun command(vararg args: String) =
         listOf(
             File(System.getProperty("java.home"), "bin/${HostPlatform.current.executable("java")}")
