@@ -8,6 +8,7 @@ on:
       - 'scripts/package_release.py'
       - 'docs/releases/**'
       - 'docs/README-FIRST.md'
+      - 'src/**'
   workflow_dispatch:
 
 env:
@@ -63,7 +64,7 @@ jobs:
       - name: Install Debian packaging dependencies
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y fakeroot
-      - name: Build and test tagged source
+      - name: Build and test release source
         shell: bash
         env:
           INSTALLER_TASK: ${{ matrix.installer }}

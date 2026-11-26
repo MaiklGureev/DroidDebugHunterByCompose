@@ -198,6 +198,15 @@ object Processes {
         if (process.isAlive) process.destroyForcibly()
     }
 
+    /** destroyForcibly only requests termination; await the OS reaper even during cancellation. */
+    suspend fun reap(process: Process) =
+        withContext(Dispatchers.IO + NonCancellable) {
+            kill(process)
+            check(process.waitFor(3000, TimeUnit.MILLISECONDS)) {
+                "Не удалось завершить собственный процесс ${process.pid()}"
+            }
+        }
+
     suspend fun run(
         args: List<String>,
         env: Map<String, String> = emptyMap(),
@@ -231,7 +240,7 @@ object Processes {
                     }
                 }
             } finally {
-                kill(process)
+                reap(process)
                 process.inputStream.close()
                 process.errorStream.close()
                 process.outputStream.close()
@@ -284,7 +293,7 @@ class StreamingProcess(private val process: Process) {
                     }
                 }
             } finally {
-                Processes.kill(process)
+                Processes.reap(process)
             }
         }
 
@@ -300,7 +309,7 @@ class StreamingProcess(private val process: Process) {
                 }
             if (!cooperative || !process.waitFor(2000, TimeUnit.MILLISECONDS))
                 Processes.kill(process)
-            process.waitFor(3000, TimeUnit.MILLISECONDS)
+            Processes.reap(process)
         }
 
     companion object {
@@ -316,7 +325,7 @@ class StreamingProcess(private val process: Process) {
                     StreamingProcess(process)
                 }
             } catch (e: CancellationException) {
-                owned?.let(Processes::kill)
+                owned?.let { Processes.reap(it) }
                 throw e
             }
         }
