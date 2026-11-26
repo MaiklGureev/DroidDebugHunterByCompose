@@ -8,7 +8,7 @@ Java is included. You do not need to install a system JDK/JRE.
 - **macOS:** open the extracted `.app`, or copy it from DMG to Applications. Choose arm64 for Apple Silicon or x64 for Intel. Builds are unsigned and not notarized.
 - **Linux x64:** run `./bin/DroidDebugHunterByCompose` from the extracted directory, or install the DEB. A graphical desktop is required.
 
-HAR analysis works immediately. Try [the synthetic sample](https://github.com/MaiklGureev/DroidDebugHunterByCompose/blob/v1.1.1/examples/sample.har).
+HAR analysis works immediately. Try [the synthetic sample](https://github.com/MaiklGureev/DroidDebugHunterByCompose/blob/v1.1.2/examples/sample.har).
 
 For a phone, open Settings → Tools (`Настройки → Инструменты`) and configure ADB, Python 3.14 and the tools directory. Preparation downloads optional components only when requested. Public archives do not include a separate Python interpreter, ADB, Frida servers or WireGuard APK.
 

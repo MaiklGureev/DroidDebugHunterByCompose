@@ -8,7 +8,7 @@ Java уже включена в приложение. Устанавливать
 - macOS: откройте `.app` из распакованной папки либо перенесите его из DMG в Applications. Архитектура arm64 — для Apple Silicon, x64 — для Intel. Сборка пока без подписи издателя и notarization.
 - Linux x64: запустите `./bin/DroidDebugHunterByCompose` в распакованной папке либо установите DEB. Требуется графическая среда рабочего стола.
 
-HAR-просмотр доступен сразу. Файл для знакомства: [examples/sample.har](https://github.com/MaiklGureev/DroidDebugHunterByCompose/blob/v1.1.1/examples/sample.har).
+HAR-просмотр доступен сразу. Файл для знакомства: [examples/sample.har](https://github.com/MaiklGureev/DroidDebugHunterByCompose/blob/v1.1.2/examples/sample.har).
 
 Для работы с телефоном откройте **Настройки → Инструменты** и выберите ADB, Python 3.14 и каталог локального комплекта. Кнопка подготовки скачивает дополнительные компоненты явно. Эти архивы не содержат отдельный Python, ADB, серверы Frida или APK WireGuard.
 

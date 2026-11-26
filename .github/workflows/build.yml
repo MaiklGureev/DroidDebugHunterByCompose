@@ -40,7 +40,7 @@ jobs:
       - name: Verify Windows uses its bundled Java runtime
         if: runner.os == 'Windows'
         shell: pwsh
-        run: ./scripts/smoke_windows.ps1 -ApplicationRoot ./build/compose/binaries-1.1.1/main/app/DroidDebugHunterByCompose
+        run: ./scripts/smoke_windows.ps1 -ApplicationRoot ./build/compose/binaries-1.1.2/main/app/DroidDebugHunterByCompose
       - name: Verify Unix uses its bundled Java runtime
         if: runner.os != 'Windows'
         run: python scripts/package_release.py --runtime-check
@@ -48,7 +48,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p build/distributions
-          tar -czf build/distributions/DroidDebugHunter-${{ runner.os }}-${{ runner.arch }}.tar.gz -C build/compose/binaries-1.1.1/main/app .
+          tar -czf build/distributions/DroidDebugHunter-${{ runner.os }}-${{ runner.arch }}.tar.gz -C build/compose/binaries-1.1.2/main/app .
       - uses: actions/upload-artifact@v4
         with:
           name: app-${{ matrix.os }}

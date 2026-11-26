@@ -71,12 +71,12 @@ Windows:
 .\run.ps1 -Task packageMsi
 ```
 
-Output: `build/compose/binaries-1.1.1/main/app/`. Only host OS/CPU tools are bundled. Without tools, the app still provides HAR analysis and external-tool configuration.
+Output: `build/compose/binaries-1.1.2/main/app/`. Only host OS/CPU tools are bundled. Without tools, the app still provides HAR analysis and external-tool configuration.
 
 Check Windows with system Java paths disabled:
 
 ```powershell
-.\scripts\smoke_windows.ps1 -ApplicationRoot .\build\compose\binaries-1.1.1\main\app\DroidDebugHunterByCompose
+.\scripts\smoke_windows.ps1 -ApplicationRoot .\build\compose\binaries-1.1.2\main\app\DroidDebugHunterByCompose
 ```
 
 On macOS/Linux: `python3 scripts/package_release.py --runtime-check`. These checks verify private Java, device selection and shutdown using isolated data. They do not require uninstalling the developer JDK or connecting Android.
