@@ -73,32 +73,6 @@ fun ToolSetupPanel(
 fun ToolComponentOptions(component: String, draft: Settings, change: (Settings) -> Unit, enabled: Boolean) {
     val options = draft.setup
     fun update(value: ToolSetupOptions) = change(draft.copy(setup = value))
-    val ids = toolFindingIds(component).map { if (it in listOf("server", "gadget")) "frida" else it }
-    if (component == "adb") {
-        AdbDownloadVersion(options.version("adb"), enabled) {
-            update(options.copy(versions = options.versions + ("adb" to it)))
-        }
-    } else Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        for (id in ids) {
-            OutlinedTextField(
-                options.version(id),
-                { update(options.copy(versions = options.versions + (id to it.trim()))) },
-                modifier = Modifier.weight(1f, fill = false).widthIn(max = 210.dp),
-                label = { Text(tr("{0} version", ToolPolicy.names.getValue(id))) },
-                supportingText = if (options.version(id) != ToolPolicy.target(id)) {
-                    {
-                        Text(
-                            if (ToolPolicy.validVersion(options.version(id))) tr("Target: {0}", ToolPolicy.target(id))
-                            else tr("Enter a numeric version"),
-                        )
-                    }
-                } else null,
-                isError = !ToolPolicy.validVersion(options.version(id)),
-                enabled = enabled,
-                singleLine = true,
-            )
-        }
-    }
     when (component) {
         "adb" -> {
             ToolPathField(tr("ADB (empty = bundle / PATH)"), draft.adb, { change(draft.copy(adb = it)) },
@@ -136,27 +110,33 @@ fun ToolComponentOptions(component: String, draft: Settings, change: (Settings) 
 }
 
 @Composable
-private fun AdbDownloadVersion(version: String, enabled: Boolean, onChange: (String) -> Unit) {
+fun ToolDownloadVersions(
+    versionIds: List<String>,
+    options: ToolSetupOptions,
+    enabled: Boolean,
+    onChange: (Map<String, String>) -> Unit,
+) {
     var editing by remember { mutableStateOf(false) }
+    val title = tr(if (versionIds.size == 1) "Change download version" else "Change download versions")
     TextButton(onClick = { editing = true }, enabled = enabled) {
-        Text(tr("Change download version"))
+        Text(title)
     }
     if (editing) {
-        var input by remember(version) { mutableStateOf(version) }
+        var versions by remember(versionIds, options.versions) {
+            mutableStateOf(versionIds.associateWith(options::version))
+        }
         val focus = remember { FocusRequester() }
-        val valid = ToolPolicy.validVersion(input)
+        val valid = versions.values.all(ToolPolicy::validVersion)
         val save = {
-            onChange(input)
+            onChange(versions)
             editing = false
         }
         AlertDialog(
             onDismissRequest = { editing = false },
-            title = { Text(tr("Change download version")) },
+            title = { Text(title) },
             text = {
-                OutlinedTextField(
-                    input,
-                    { input = it.trim() },
-                    Modifier.fillMaxWidth().focusRequester(focus).onPreviewKeyEvent { event ->
+                Column(
+                    Modifier.onPreviewKeyEvent { event ->
                         if (event.type == KeyEventType.KeyDown &&
                             (event.key == Key.Enter || event.key == Key.NumPadEnter)
                         ) {
@@ -164,14 +144,29 @@ private fun AdbDownloadVersion(version: String, enabled: Boolean, onChange: (Str
                             true
                         } else false
                     },
-                    label = { Text(tr("{0} version", ToolPolicy.names.getValue("adb"))) },
-                    supportingText = {
-                        Text(if (valid) tr("Target: {0}", ToolPolicy.target("adb")) else tr("Enter a numeric version"))
-                    },
-                    isError = !valid,
-                    singleLine = true,
-                )
-                LaunchedEffect(Unit) { focus.requestFocus() }
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    for ((index, id) in versionIds.withIndex()) {
+                        val input = versions.getValue(id)
+                        val validVersion = ToolPolicy.validVersion(input)
+                        OutlinedTextField(
+                            value = input,
+                            onValueChange = { versions = versions + (id to it.trim()) },
+                            modifier = if (index == 0) Modifier.fillMaxWidth().focusRequester(focus)
+                                else Modifier.fillMaxWidth(),
+                            label = { Text(tr("{0} version", ToolPolicy.names.getValue(id))) },
+                            supportingText = {
+                                Text(
+                                    if (validVersion) tr("Target: {0}", ToolPolicy.target(id))
+                                    else tr("Enter a numeric version"),
+                                )
+                            },
+                            isError = !validVersion,
+                            singleLine = true,
+                        )
+                    }
+                    LaunchedEffect(Unit) { focus.requestFocus() }
+                }
             },
             confirmButton = { TextButton(onClick = save, enabled = valid) { Text(tr("Apply")) } },
             dismissButton = { TextButton(onClick = { editing = false }) { Text(tr("Cancel")) } },

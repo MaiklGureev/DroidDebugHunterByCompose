@@ -153,7 +153,6 @@
   "Debugging": "Debugging",
   "Details": "Details",
   "Details: {0}": "Details: {0}",
-  "Detected / selected: {0}": "Detected / selected: {0}",
   "Detected: {0} · Target: {1}": "Detected: {0} · Target: {1}",
   "Device": "Device",
   "Device ABI": "Device ABI",
@@ -363,7 +362,7 @@
   "Prepare Python first, or use the download links for manual setup.": "Prepare Python first, or use the download links for manual setup.",
   "Prepare and install the CA on Android for HTTPS.": "Prepare and install the CA on Android for HTTPS.",
   "Prepare profile": "Prepare profile",
-  "Prepare selected ({0})": "Prepare selected ({0})",
+  "Prepare capture tools": "Prepare capture tools",
   "Prepare the CA first": "Prepare the CA first",
   "Prepare the CA, send it to Android and install it manually as a CA certificate. The app must trust user CAs.": "Prepare the CA, send it to Android and install it manually as a CA certificate. The app must trust user CAs.",
   "Prepare the VPN profile first": "Prepare the VPN profile first",
@@ -378,7 +377,7 @@
   "Proxy changed by another owner; new settings preserved": "Proxy changed by another owner; new settings preserved",
   "Python 3.14 (empty = auto)": "Python 3.14 (empty = auto)",
   "Python engine": "Python engine",
-  "Python is prepared when a selected component needs it.": "Python is prepared when a selected component needs it.",
+  "Tools that require Python prepare it as needed.": "Tools that require Python prepare it as needed.",
   "Quick start": "Quick start",
   "Ready": "Ready",
   "Ready. Connect Android or import a HAR file.": "Ready. Connect Android or import a HAR file.",
@@ -696,5 +695,6 @@
   "uv target {0}; found {1}. Continuing with the selected executable.": "uv target {0}; found {1}. Continuing with the selected executable.",
   "The component directory links to another location. Choose another tools folder or configure its executable path.": "The component directory links to another location. Choose another tools folder or configure its executable path.",
   "Change download version": "Change download version",
+  "Change download versions": "Change download versions",
   "Detected: {0} · Download version: {1}": "Detected: {0} · Download version: {1}"
 }

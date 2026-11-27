@@ -12,7 +12,7 @@ Choose English or Русский in Settings → Interface language. The interfa
 
 Analyze HAR immediately: Ctrl+O and choose a file, or try the repository's synthetic sample. No phone, ADB or Python is needed.
 
-For Android, open **Connection**. The **ADB software** block handles the device connection. **Capture software** shows Python and the components for the selected capture method. Check components and use **Prepare selected**. Paths and parameters are shown next to each tool. Use **Manual download** for links or **Download and prepare** to fetch a single component from the app. See [tool preparation](DOWNLOADS.en.md).
+For Android, open **Connection**. The **ADB software** block handles the device connection. **Capture software** shows Python and the components for the selected capture method. Use **Prepare capture tools** to prepare those components together. Versions, paths and parameters are shown next to each tool. Use **Manual download** for links or **Download and prepare** to fetch a single component from the app. See [tool preparation](DOWNLOADS.en.md).
 
 Open **Connection**, choose USB, Wi-Fi, or Emulator, then select the device. For USB, enable debugging and confirm the RSA key on the phone. Android 11+ also supports Wi-Fi pairing with a six-digit code followed by connection to its separate debugging port. See [Android setup](ANDROID_SETUP_GUIDE.en.md).
 

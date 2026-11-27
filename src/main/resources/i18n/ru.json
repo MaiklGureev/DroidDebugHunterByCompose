@@ -153,7 +153,6 @@
   "Debugging": "Отладка",
   "Details": "Детали",
   "Details: {0}": "Подробнее: {0}",
-  "Detected / selected: {0}": "Обнаружено / выбрано: {0}",
   "Detected: {0} · Target: {1}": "Обнаружено: {0} · Целевая версия: {1}",
   "Device": "Устройство",
   "Device ABI": "ABI устройства",
@@ -363,7 +362,7 @@
   "Prepare Python first, or use the download links for manual setup.": "Сначала подготовьте Python или воспользуйтесь ссылками для ручной настройки.",
   "Prepare and install the CA on Android for HTTPS.": "Подготовьте CA и установите его на Android для HTTPS.",
   "Prepare profile": "Подготовить профиль",
-  "Prepare selected ({0})": "Подготовить выбранные ({0})",
+  "Prepare capture tools": "Подготовить инструменты захвата",
   "Prepare the CA first": "Сначала подготовьте CA",
   "Prepare the CA, send it to Android and install it manually as a CA certificate. The app must trust user CAs.": "Подготовьте CA, передайте его на Android и вручную установите как «Сертификат CA». Приложение должно доверять пользовательским CA.",
   "Prepare the VPN profile first": "Сначала подготовьте VPN-профиль",
@@ -378,7 +377,7 @@
   "Proxy changed by another owner; new settings preserved": "Прокси изменён пользователем; новые настройки сохранены",
   "Python 3.14 (empty = auto)": "Python 3.14 (пусто = автоматически)",
   "Python engine": "Движок Python",
-  "Python is prepared when a selected component needs it.": "Если выбранному компоненту нужен Python, он подготавливается вместе с ним.",
+  "Tools that require Python prepare it as needed.": "Для инструментов, которым нужен Python, он подготавливается при необходимости.",
   "Quick start": "Быстрый старт",
   "Ready": "Готово",
   "Ready. Connect Android or import a HAR file.": "Готово. Подключите Android или импортируйте HAR.",
@@ -696,5 +695,6 @@
   "uv target {0}; found {1}. Continuing with the selected executable.": "Целевая uv — {0}; найдена {1}. Продолжаем с выбранным исполняемым файлом.",
   "The component directory links to another location. Choose another tools folder or configure its executable path.": "Папка компонента ссылается на другой каталог. Выберите другую папку инструментов или укажите путь к исполняемому файлу.",
   "Change download version": "Изменить версию для скачивания",
+  "Change download versions": "Изменить версии для скачивания",
   "Detected: {0} · Download version: {1}": "Обнаружено: {0} · Версия для скачивания: {1}"
 }

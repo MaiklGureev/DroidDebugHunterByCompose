@@ -2,7 +2,7 @@
 
 **English** | [Русский](DOWNLOADS.md)
 
-HAR analysis needs no external tools. Java is included in native packages. ADB is needed for devices; Python and mode-specific packages are needed for capture. Use **Download and prepare** for ADB or check capture components and click **Prepare selected**. Normal startup downloads nothing.
+HAR analysis needs no external tools. Java is included in native packages. ADB is needed for devices; Python and mode-specific packages are needed for capture. Use **Download and prepare** for ADB and **Prepare capture tools** for the current capture method. Normal startup downloads nothing.
 
 ## Target versions and alternatives
 
@@ -23,12 +23,12 @@ The reference configuration is recorded in `tool-setup/tool-versions.json` (revi
 
 ## Configure and download tools
 
-On **Connection**, each tool shows its status, versions, bundle folder and local options. ADB is shared across USB, Wi-Fi and Emulator. Use **Change download version** to select a different ADB release. Choose the Python executable and method in the Python section. The shared tool directory and download cache are always visible.
+On **Connection**, each tool shows its status, detected version, download version, bundle folder and local options. ADB is shared across USB, Wi-Fi and Emulator. Use **Change download version** to edit a tool's download version. Tools that include multiple packages have a field for each version in the same dialog. Choose the Python executable and method in the Python section. The shared tool directory and download cache are always visible.
 
 - **Manual download:** open the component's sources, copy links and follow the placement instructions. Use **Check tools** after placing files or saving an executable path.
-- **Download and prepare:** let the app download and prepare this component in the selected folder. To prepare a batch, check the desired capture tools and click **Prepare selected**. Selecting a component or opening its links does not start a download.
+- **Download and prepare** downloads and prepares one component in the selected folder. **Prepare capture tools** prepares the tools required by the current capture method.
 
-If a component fails, independent steps continue. For example, WireGuard can be prepared even when Python is unavailable. Steps with missing prerequisites are marked **Skipped**. To retry ADB, use its own download button. For capture tools, use **Select unfinished**, then **Prepare selected**.
+If a component fails, independent steps continue. For example, WireGuard can be prepared even when Python is unavailable. Steps with missing prerequisites are marked **Skipped**. To retry ADB, use its own download button. For capture tools, use **Retry unfinished components**.
 
 Installation methods, versions, offline/cache settings and executable paths are saved per OS/CPU profile.
 
@@ -69,7 +69,7 @@ Use the chosen versions in filenames. Offline mode makes no download attempts. P
 
 ## Separate downloads and manual folder layout
 
-Check the Frida client, server and Gadget together for the full bundle, or choose individual components. **Manual download** opens versioned URLs with **Download file**, **Copy link**, **Open link** and **Open destination folder** actions. **Download file** saves the original archive or APK in the cache. Python package links open the files page for the selected version so you can choose compatible wheels and dependencies. **Copy all links** includes placement instructions.
+For a Frida capture method, use **Frida bundle: client + server + Gadget** to prepare the full bundle, or download components individually. **Manual download** opens versioned URLs with **Download file**, **Copy link**, **Open link** and **Open destination folder** actions. **Download file** saves the original archive or APK in the cache. Python package links open the files page for the selected version so you can choose compatible wheels and dependencies. **Copy all links** includes placement instructions.
 
 At startup the app tries to create missing component/cache directories. A read-only folder produces warnings without preventing startup or requesting elevation. **Check / create folders** retries after you choose another location. **Folder structure** shows your actual selected root and versions; you may create the same layout manually:
 
