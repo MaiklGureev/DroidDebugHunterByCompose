@@ -348,54 +348,6 @@ private fun NavigationItem(page: Page, selected: Boolean, onClick: () -> Unit) {
 }
 
 @Composable
-private fun CommandPalette(model: AppState, dismiss: () -> Unit) {
-    var query by remember { mutableStateOf("") }
-    val commands =
-        Page.entries.map { it.label to { model.page = it } } +
-            listOf(
-                tr("Import HAR") to
-                    {
-                        chooseFile(title = tr("Import HAR"))?.let(model::importHar)
-                        Unit
-                    },
-                tr("Refresh devices") to
-                    {
-                        model.task(tr("Refreshing devices")) { model.refreshDevices(true) }
-                    },
-                tr("Refresh apps") to model::loadApps,
-                tr("Check tools") to {
-                    model.page = Page.Connection
-                    model.checkTools()
-                },
-                tr("Start / stop capture") to model::toggleCapture,
-                tr("Start / stop Logcat") to model::toggleLogcat,
-            )
-    AlertDialog(
-        onDismissRequest = dismiss,
-        title = { Text(tr("Commands")) },
-        text = {
-            Column(Modifier.width(520.dp)) {
-                Field(query, { query = it }, tr("Find a command…"), Modifier.fillMaxWidth())
-                LazyColumn(Modifier.heightIn(max = 380.dp)) {
-                    items(commands.filter { it.first.contains(query, true) }) { (title, action) ->
-                        Text(
-                            title,
-                            Modifier.fillMaxWidth()
-                                .clickable {
-                                    dismiss()
-                                    action()
-                                }
-                                .padding(12.dp),
-                        )
-                    }
-                }
-            }
-        },
-        confirmButton = { TextButton(dismiss) { Text(tr("Close")) } },
-    )
-}
-
-@Composable
 fun AppPicker(model: AppState, modifier: Modifier = Modifier, enabled: Boolean = true) {
     var open by remember { mutableStateOf(false) }
     Row(
