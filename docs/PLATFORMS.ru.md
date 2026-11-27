@@ -71,12 +71,12 @@ Windows:
 .\run.ps1 -Task packageMsi
 ```
 
-Папки результатов: `build/compose/binaries-1.1.2/main/app/`. Утилиты включаются только для ОС/CPU сборки. При отсутствии локального комплекта приложение собирается с HAR-просмотром и возможностью указать внешние утилиты.
+Папки результатов: `build/compose/binaries-1.1.3/main/app/`. Утилиты включаются только для ОС/CPU сборки. При отсутствии локального комплекта приложение собирается с HAR-просмотром и возможностью указать внешние утилиты.
 
 Проверка Windows без Java из PATH/JAVA_HOME:
 
 ```powershell
-.\scripts\smoke_windows.ps1 -ApplicationRoot .\build\compose\binaries-1.1.2\main\app\DroidDebugHunterByCompose
+.\scripts\smoke_windows.ps1 -ApplicationRoot .\build\compose\binaries-1.1.3\main\app\DroidDebugHunterByCompose
 ```
 
 Проверка запускает нативный exe с недоступными путями системной Java и убеждается, что `java.home` указывает на `runtime/` внутри сборки. Это не требует удаления установленного JDK разработчика.

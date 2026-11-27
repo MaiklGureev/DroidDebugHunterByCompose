@@ -121,9 +121,9 @@ Windows-обёртка с дополнительной возможностью 
 .\run.ps1 -Task createDistributable
 ```
 
-Переносимая Windows-папка: `build/compose/binaries-1.1.2/main/app/DroidDebugHunterByCompose/`. Она включает собственный JRE и локальные утилиты, если они подготовлены. Копируйте всю папку вместе с `app/` и `runtime/`. Для MSI: `-Task packageMsi`. Compose-плагин подготавливает WiX; при первой упаковке нужен доступ к его загрузке на GitHub. Для macOS/Linux: `./gradlew test createDistributable`, затем при необходимости `packageDmg`/`packageDeb` на целевой ОС.
+Переносимая Windows-папка: `build/compose/binaries-1.1.3/main/app/DroidDebugHunterByCompose/`. Она включает собственный JRE и локальные утилиты, если они подготовлены. Копируйте всю папку вместе с `app/` и `runtime/`. Для MSI: `-Task packageMsi`. Compose-плагин подготавливает WiX; при первой упаковке нужен доступ к его загрузке на GitHub. Для macOS/Linux: `./gradlew test createDistributable`, затем при необходимости `packageDmg`/`packageDeb` на целевой ОС.
 
-Проверка запуска Windows без системной Java: `./scripts/smoke_windows.ps1 -ApplicationRoot ./build/compose/binaries-1.1.2/main/app/DroidDebugHunterByCompose`. Скрипт отключает пути системной Java для дочернего процесса, проверяет встроенный runtime, выбор устройства и завершение модели приложения. Проверка работает с временными данными и не подключается к Android. На macOS/Linux: `python3 scripts/package_release.py --runtime-check`.
+Проверка запуска Windows без системной Java: `./scripts/smoke_windows.ps1 -ApplicationRoot ./build/compose/binaries-1.1.3/main/app/DroidDebugHunterByCompose`. Скрипт отключает пути системной Java для дочернего процесса, проверяет встроенный runtime, выбор устройства и завершение модели приложения. Проверка работает с временными данными и не подключается к Android. На macOS/Linux: `python3 scripts/package_release.py --runtime-check`.
 
 Тесты проверяют HAR, бинарные тела и частичные данные, cURL в двух shell-форматах, профили ОС/CPU, обнаружение утилит, ADB/UID/разрешения, Logcat, тайм-ауты и отмену процессов. CI настроен на Windows, Ubuntu и macOS: тесты, сборка нативного образа, отчёты и артефакты. Offline-проверки подготовки: `python -m unittest discover -s scripts -p 'test_*.py'`. Полные Frida/VPN-сценарии требуют отдельной проверки на совместимом Android APK.
 

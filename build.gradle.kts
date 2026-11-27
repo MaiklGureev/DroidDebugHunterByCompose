@@ -9,7 +9,7 @@ plugins {
 
 group = "ru.gureev"
 
-version = "1.1.2"
+version = "1.1.3"
 
 repositories {
     mavenCentral()
@@ -51,7 +51,7 @@ compose.desktop {
             appResourcesRootDir.set(layout.projectDirectory.dir("desktop-resources"))
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
             packageName = "DroidDebugHunterByCompose"
-            packageVersion = "1.1.2"
+            packageVersion = "1.1.3"
             description = "Android debugging and traffic inspection"
             vendor = "DroidDebugHunter"
             modules("java.desktop", "java.net.http", "java.prefs", "jdk.unsupported")

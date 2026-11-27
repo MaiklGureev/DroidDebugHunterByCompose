@@ -15,6 +15,7 @@
 | Windows / macOS / Linux | [Platforms](PLATFORMS.md) | [Платформы](PLATFORMS.ru.md) |
 | Architecture | [Architecture](ARCHITECTURE.md) | [Архитектура](ARCHITECTURE.ru.md) |
 | Release process | [Releasing](RELEASING.md) | [Выпуск](RELEASING.ru.md) |
+| Release 1.1.3 | [Notes](releases/1.1.3.md) | [Изменения](releases/1.1.3.ru.md) |
 | Release 1.1.2 | [Notes](releases/1.1.2.md) | [Изменения](releases/1.1.2.ru.md) |
 | Release 1.1.1 | [Notes](releases/1.1.1.md) | [Изменения](releases/1.1.1.ru.md) |
 | Release 1.1.0 | [Notes](releases/1.1.0.md) | [Изменения](releases/1.1.0.ru.md) |
