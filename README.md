@@ -8,6 +8,29 @@ An Android debugging desktop application built with **Kotlin, Compose Desktop an
 
 Native distributions include their own Java runtime: **users do not need a system JDK or JRE**. Downloads support Windows x64, Linux x64, and macOS Apple Silicon and Intel. ADB, Python and capture tools are configured separately. The interface supports English and Russian. Switch in Settings → Interface language; the choice is saved automatically and applies immediately, including offline Help. The initial language follows the OS (Russian for ru, English otherwise).
 
+## Screenshots
+
+Windows, dark theme. The traffic and request details use the [synthetic demo HAR](examples/ui-demo.har); no phone or live network capture is involved. Each README shows its own interface language.
+
+[![Traffic: imported HAR requests, status codes, filters and app attribution](docs/images/traffic.en.jpg)](docs/images/traffic.en.jpg)
+
+<details>
+<summary>More screenshots: request details, tool setup and Markdown help</summary>
+
+**Request and response details** — a separate window with headers and formatted JSON.
+
+[![Response details with headers and formatted JSON](docs/images/request-details.en.jpg)](docs/images/request-details.en.jpg)
+
+**Tool setup** — visible setup choices, component bundles, target versions and Python installation methods.
+
+[![Tool setup cards, Frida bundle and Python installation choices](docs/images/tool-setup.en.jpg)](docs/images/tool-setup.en.jpg)
+
+**Offline Markdown help** — readable headings, tables and links in the application.
+
+[![Markdown help displaying the ADB operations guide](docs/images/markdown-help.en.jpg)](docs/images/markdown-help.en.jpg)
+
+</details>
+
 ## Features
 
 - USB, emulator and Wi-Fi ADB, Android 11+ pairing, automatic device refresh and remembered selection.

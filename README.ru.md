@@ -10,6 +10,29 @@ Desktop-приложение на **Kotlin + Compose Desktop + coroutines** дл
 
 Документация: [оглавление](docs/README.ru.md), [руководство](src/main/resources/runtime/help/USAGE.md), [настройка Android](src/main/resources/runtime/help/ANDROID_SETUP_GUIDE.md).
 
+## Скриншоты
+
+Windows, тёмная тема. Трафик и детали запросов показаны на [демонстрационном HAR](examples/ui-demo.har) с вымышленными данными, без телефона и живого захвата. В каждой версии README используется соответствующий язык интерфейса.
+
+[![Трафик: импортированные HAR-запросы, коды ответа, фильтры и приложение](docs/images/traffic.ru.jpg)](docs/images/traffic.ru.jpg)
+
+<details>
+<summary>Другие экраны: детали запроса, настройка инструментов и Markdown-справка</summary>
+
+**Содержимое запросов и ответов** — отдельное окно с заголовками и форматированным JSON.
+
+[![Детали ответа с заголовками и форматированным JSON](docs/images/request-details.ru.jpg)](docs/images/request-details.ru.jpg)
+
+**Настройка инструментов** — открытые варианты настройки, комплекты компонентов, целевые версии и способы установки Python.
+
+[![Карточки настройки, комплект Frida и способы установки Python](docs/images/tool-setup.ru.jpg)](docs/images/tool-setup.ru.jpg)
+
+**Офлайн-справка Markdown** — заголовки, таблицы и ссылки внутри приложения.
+
+[![Markdown-справка с руководством по ADB-инструментам](docs/images/markdown-help.ru.jpg)](docs/images/markdown-help.ru.jpg)
+
+</details>
+
 ## Возможности
 
 - USB, эмуляторы, Wi-Fi ADB, сопряжение Android 11+, автообновление устройств и сохранение выбора.
