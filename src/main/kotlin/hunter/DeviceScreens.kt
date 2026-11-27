@@ -3,6 +3,8 @@ package hunter
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.*
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.*
 import androidx.compose.material.icons.Icons
@@ -11,6 +13,7 @@ import androidx.compose.material.icons.outlined.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -22,68 +25,24 @@ import kotlinx.coroutines.withContext
 
 @Composable
 fun DevicesScreen(model: AppState) {
-    var captureSetup by remember { mutableStateOf(false) }
     val enabled = model.busy.isEmpty()
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        AndroidConnectionWizard(model, enabled)
         Row(
             Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(tr("ADB devices"), fontWeight = FontWeight.SemiBold)
-            Action(tr("Restart ADB"), enabled = enabled, onClick = model::restartAdb)
-        }
-        if (model.devices.isEmpty()) Text(tr("No devices"), color = Muted)
-        model.devices.forEach { device ->
-            Surface(
-                shape = RoundedCornerShape(10.dp),
-                border =
-                    BorderStroke(
-                        1.dp,
-                        if (model.selectedDevice?.serial == device.serial) Accent else Line,
-                    ),
-            ) {
-                Row(
-                    Modifier.fillMaxWidth()
-                        .clickable(enabled = enabled) { model.selectDevice(device) }
-                        .padding(18.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(14.dp),
-                ) {
-                    Icon(
-                        device.connection.icon,
-                        null,
-                        Modifier.size(30.dp),
-                        tint = if (device.state == "device") Green else Amber,
-                    )
-                    Column(Modifier.weight(1f)) {
-                        Text(
-                            device.model.ifBlank { device.serial },
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.Medium,
-                        )
-                        Text(device.serial, color = Muted, fontSize = 12.sp)
-                    }
-                    Pill(
-                        when (device.state) {
-                            "device" -> tr("Connected")
-                            "unauthorized" -> tr("Confirm RSA on the phone")
-                            else -> device.state
-                        },
-                        if (device.state == "device") Green else Amber,
-                    )
-                    RadioButton(
-                        model.selectedDevice?.serial == device.serial,
-                        { model.selectDevice(device) },
-                        enabled = enabled,
-                    )
-                }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Action(tr("Set up connection"), Icons.Outlined.Cable) { model.page = Page.Connection }
+                Action(tr("Restart ADB"), enabled = enabled, onClick = model::restartAdb)
             }
         }
+        if (model.devices.isEmpty()) Text(tr("No devices"), color = Muted)
+        AdbDeviceRows(model, model.devices, enabled)
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             Panel(
                 tr("Selected device"),
@@ -114,14 +73,8 @@ fun DevicesScreen(model: AppState) {
                             )
                     }
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Action("adb root", enabled = enabled, onClick = model::rootAdb)
-                    Action(
-                        tr("Disconnect Wi-Fi ADB"),
-                        enabled = enabled && model.selectedDevice?.connection == AndroidConnection.Wifi,
-                        onClick = model::disconnect,
-                    )
-                }
+                Action("adb root", enabled = enabled && model.selectedDevice?.state == "device",
+                    onClick = model::rootAdb)
                 Text(
                     tr(
                         "unauthorized: unlock the screen and allow debugging. offline: reconnect USB or the network connection."
@@ -131,22 +84,56 @@ fun DevicesScreen(model: AppState) {
                 )
             }
         }
-        Panel(
-            "Frida",
-            tr("Target Frida {0} · server matches the active client and ABI", Adb.FRIDA_VERSION),
-            Modifier.fillMaxWidth(),
-        ) {
-            FridaConnectionPanel(model, forCapture = false, enabled = enabled && !model.capturing,
-                openCapture = {
-                    if (!model.mode.isFrida) {
-                        model.mode = CaptureMode.OkHttp
+    }
+}
+
+@Composable
+fun AdbDeviceRows(model: AppState, devices: List<Device>, enabled: Boolean) {
+    Column(Modifier.selectableGroup(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        devices.forEach { device ->
+            val selected = model.selectedDevice?.serial == device.serial
+            Surface(
+                shape = RoundedCornerShape(10.dp),
+                border =
+                    BorderStroke(
+                        1.dp,
+                        if (selected) Accent else Line,
+                    ),
+            ) {
+                Row(
+                    Modifier.fillMaxWidth()
+                        .selectable(selected, enabled, role = Role.RadioButton) { model.selectDevice(device) }
+                        .padding(horizontal = 14.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                ) {
+                    Icon(
+                        device.connection.icon,
+                        null,
+                        Modifier.size(30.dp),
+                        tint = if (device.state == "device") Green else Amber,
+                    )
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            device.model.ifBlank { device.serial },
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Medium,
+                        )
+                        Text(device.serial, color = Muted, fontSize = 12.sp)
                     }
-                    captureSetup = true
-                },
-            )
+                    Pill(
+                        when (device.state) {
+                            "device" -> tr("Connected")
+                            "unauthorized" -> tr("Confirm RSA on the phone")
+                            else -> device.state
+                        },
+                        if (device.state == "device") Green else Amber,
+                    )
+                    RadioButton(selected, onClick = null, enabled = enabled)
+                }
+            }
         }
     }
-    if (captureSetup) CaptureSetup(model) { captureSetup = false }
 }
 
 @Composable
@@ -708,10 +695,10 @@ fun HelpScreen(model: AppState) {
                 ) {
                     Text(
                         tr(
-                            "1. Enable Developer options and USB debugging.\n2. Connect the phone and confirm the RSA key.\n3. Select the device in the top bar.\n4. Refresh apps and select the target."
+                            "Open Connection to set up USB, Wi-Fi or an emulator. Then choose the target app on Traffic."
                         )
                     )
-                    Action(tr("Open devices")) { model.page = Page.Devices }
+                    Action(tr("Set up connection")) { model.page = Page.Connection }
                 }
                 Panel(tr("Choose a capture mode"), modifier = Modifier.fillMaxWidth()) {
                     CaptureMode.entries.forEach {
@@ -720,7 +707,7 @@ fun HelpScreen(model: AppState) {
                     }
                     Text(
                         tr(
-                            "On Traffic, open settings beside Start to prepare CA/VPN and configure Frida."
+                            "Prepare the certificate, VPN or Frida on Connection, then start capture on Traffic."
                         ),
                         color = Muted,
                     )

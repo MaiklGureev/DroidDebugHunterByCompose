@@ -14,17 +14,17 @@ Analyze HAR immediately: Ctrl+O and choose a file, or try the repository's synth
 
 For Android, open Settings → Tools (`Настройки → Инструменты`), set ADB, Python and the tools directory, then choose manual/guided/automatic setup, Apply (`Применить`) and check tools. Additional downloads run only on request. See [tool preparation](DOWNLOADS.en.md).
 
-Enable USB debugging, confirm the RSA key on the phone and select a device in the top bar. Android 11+ also supports Wi-Fi pairing with a six-digit code followed by connection to its separate debugging port. See [Android setup](ANDROID_SETUP_GUIDE.en.md).
+Open **Connection**, choose USB, Wi-Fi, or Emulator, then select the device. For USB, enable debugging and confirm the RSA key on the phone. Android 11+ also supports Wi-Fi pairing with a six-digit code followed by connection to its separate debugging port. See [Android setup](ANDROID_SETUP_GUIDE.en.md).
 
 ## Devices and apps
 
-Devices (`Устройства`) provides USB/Wi-Fi connection, root checks and frida-server control. Apps (`Приложения`) lists packages in the current Android user profile; refresh and select a target. Search includes app name, package, UID and App ID (`UID % 100000`, not PID). Package names remain available if labels cannot be read.
+Devices (`Устройства`) provides the ADB device list and device diagnostics, including root checks. Apps (`Приложения`) lists packages in the current Android user profile; refresh and select a target. Search includes app name, package, UID and App ID (`UID % 100000`, not PID). Package names remain available if labels cannot be read.
 
 Operations target the selected serial/profile. Refresh apps after changing Android profiles. Clearing data and uninstalling require confirmation. JDWP is Java debugging for a debuggable APK, separate from Frida. See [ADB operations](ADB_TOOLS.en.md).
 
 ## Capture traffic
 
-On Traffic (`Трафик`), open capture settings beside Start, choose a mode and run Check readiness (`Проверить готовность`). Readiness checks do not replace manual CA installation, VPN consent or validation of actual captured data after startup.
+Choose a capture method and prepare it on **Connection**. For Frida or WireGuard, select the target app on **Traffic** before checking readiness. Start and stop capture on **Traffic**. Readiness checks do not replace manual CA installation, VPN consent or validation of actual captured data after startup.
 
 | Mode | Requirements and limits |
 | --- | --- |

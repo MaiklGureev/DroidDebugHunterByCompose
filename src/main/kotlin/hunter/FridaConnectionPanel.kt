@@ -17,48 +17,38 @@ import androidx.compose.ui.unit.sp
 @Composable
 fun FridaConnectionPanel(
     model: AppState,
-    forCapture: Boolean,
     enabled: Boolean,
-    openCapture: () -> Unit = {},
-    dismiss: () -> Unit = {},
+    selectDevice: () -> Unit,
 ) {
-    val diagnosis = model.fridaDiagnosis(forCapture)
+    val diagnosis = model.fridaDiagnosis()
     val next = diagnosis?.next
     diagnosis?.checks?.forEach { CheckResult(it) }
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        if (next != null && next != FridaNext.Retry && (!forCapture || next != FridaNext.Ready) &&
-            (forCapture || next != FridaNext.Device)) {
+        if (next != null && next != FridaNext.Retry && next != FridaNext.Ready) {
             val managesServer = next == FridaNext.Install || next == FridaNext.Start
             Action(
-                tr(if (next == FridaNext.Ready) "Open capture setup" else next.label),
+                tr(next.label),
                 enabled = enabled && (!managesServer || !model.ownsFridaServer()),
                 primary = true,
             ) {
                 when (next) {
-                    FridaNext.Device -> {
-                        model.page = Page.Devices
-                        dismiss()
-                    }
-                    FridaNext.Tools -> {
-                        model.page = Page.Settings
-                        dismiss()
-                    }
+                    FridaNext.Device -> selectDevice()
+                    FridaNext.Tools -> model.page = Page.Settings
                     FridaNext.App -> {
-                        model.page = Page.Apps
+                        model.page = Page.Traffic
                         if (model.apps.isEmpty()) model.loadApps()
-                        dismiss()
                     }
-                    FridaNext.Install -> model.installFrida(forCapture = forCapture)
-                    FridaNext.Start -> model.startFrida(forCapture)
+                    FridaNext.Install -> model.installFrida()
+                    FridaNext.Start -> model.startFrida()
                     FridaNext.Gadget -> {
                         model.updateSettings(model.settings.copy(gadget = true))
-                        model.checkFrida(forCapture)
+                        model.checkFrida()
                     }
                     FridaNext.LaunchApp -> {
                         model.updateSettings(model.settings.copy(spawn = true))
-                        model.checkFrida(forCapture)
+                        model.checkFrida()
                     }
-                    FridaNext.Ready -> openCapture()
+                    FridaNext.Ready,
                     FridaNext.Retry -> Unit
                 }
             }
@@ -69,12 +59,12 @@ fun FridaConnectionPanel(
             enabled,
             primary = next == null || next == FridaNext.Retry,
         ) {
-            model.checkFrida(forCapture)
+            model.checkFrida()
         }
         if (model.ownsFridaServer()) {
             Action(tr("Stop owned server"), Icons.Outlined.Stop, enabled, onClick = model::stopFrida)
         }
-        if (!forCapture) {
+        if (!model.settings.gadget) {
             Action(tr("Select file…"), enabled = enabled && model.selectedDevice?.state == "device" &&
                 !model.ownsFridaServer()) {
                 chooseFile(title = tr("frida-server (extracted ELF)"))?.let { model.installFrida(it) }

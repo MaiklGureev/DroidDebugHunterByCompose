@@ -27,7 +27,13 @@ val AndroidConnection.icon
 @Composable
 fun AndroidConnectionWizard(model: AppState, enabled: Boolean) {
     var method by remember { mutableStateOf(model.selectedDevice?.connection ?: AndroidConnection.Usb) }
-    Panel(tr("Connect Android"), modifier = Modifier.fillMaxWidth()) {
+    val devices = model.devices.filter { it.connection == method }
+    val selected = model.selectedDevice
+    Panel(
+        tr("Connect Android"),
+        selected?.let { tr("Selected: {0}", it.label) } ?: "",
+        Modifier.fillMaxWidth(),
+    ) {
         FlowRow(
             Modifier.fillMaxWidth().selectableGroup(),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -71,14 +77,20 @@ fun AndroidConnectionWizard(model: AppState, enabled: Boolean) {
             }
             AndroidConnection.Wifi -> WirelessConnection(model, enabled)
         }
-        if (method != AndroidConnection.Wifi) {
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
             Action(tr("Refresh"), Icons.Outlined.Refresh, enabled && !model.refreshing) {
                 model.task(tr("Refreshing devices")) { model.refreshDevices(true) }
             }
+            if (method == AndroidConnection.Wifi && selected?.connection == method) {
+                Action(tr("Disconnect Wi-Fi ADB"), enabled = enabled && selected.state == "device",
+                    onClick = model::disconnect)
+            }
         }
-        if (model.devices.any { it.connection == method && it.state == "device" }) {
-            Text(tr("Select the connected device from the list below."), color = Muted)
-        }
+        if (devices.isEmpty()) Text(tr("No devices for this connection method"), color = Muted)
+        else AdbDeviceRows(model, devices, enabled)
     }
 }
 

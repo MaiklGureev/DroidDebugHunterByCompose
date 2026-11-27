@@ -97,10 +97,9 @@ The same checks/preparation are available in Settings → Tools (`Настрой
 
 ## Connect a phone
 
-1. Enable USB debugging and confirm the computer's RSA key on Android.
-2. Select a device in the top bar. Refresh apps and select the target when required.
-3. On Traffic (`Трафик`), choose a capture mode and open its settings beside Start.
-4. Run readiness checks, complete the manual Android steps, then start capture.
+1. Open **Connection** and choose USB, Wi-Fi, or Emulator. Select the Android device.
+2. On **Connection**, choose a capture method and complete its setup. For Frida or WireGuard, select the target app on **Traffic** first.
+3. Run the readiness checks and complete any prompts on Android. On **Traffic**, select **Start capture**.
 
 A regular proxy cannot identify the package/UID. VPN attribution comes from its configured allowlist. HTTPS proxy/VPN capture requires the target app to trust the CA. Pinning, unavailable TLS functions and HTTP/3 can limit capture. Rootless Frida requires a debuggable APK with working `run-as`/JDWP.
 

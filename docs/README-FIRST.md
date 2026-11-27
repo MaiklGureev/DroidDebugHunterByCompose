@@ -14,7 +14,7 @@ For a phone, open Settings → Tools (`Настройки → Инструмен
 
 Check detected versions against the targets; other versions are allowed with compatibility warnings. **Download links / folders** provides individual archive downloads, link copying and placement instructions. Missing directories are created on startup where permitted; **Folder structure** shows the manual layout. The full [tool setup guide](https://github.com/MaiklGureev/DroidDebugHunterByCompose/blob/v1.1.3/src/main/resources/runtime/help/DOWNLOADS.en.md) is also included in offline Help. Public archives do not bundle a separate Python, ADB, Frida servers or WireGuard APK.
 
-Confirm USB debugging, CA installation/trust and VPN permission on Android. Open capture settings beside Start on Traffic (`Трафик`) and follow the offline Help. English and Russian manuals are included in `runtime/help` inside app resources and extracted into the user data directory. Switch English/Russian in Settings → Interface language (Настройки → Язык интерфейса). It applies immediately and is saved automatically; offline Help follows the selected language.
+Confirm USB debugging, CA installation/trust and VPN permission on Android. Choose the device and capture method on **Connection**, then start capture on **Traffic**. See the offline Help for setup steps. English and Russian manuals are included in `runtime/help` inside app resources and extracted into the user data directory. Switch English/Russian in Settings → Interface language (Настройки → Язык интерфейса). It applies immediately and is saved automatically; offline Help follows the selected language.
 
 [Releases and SHA-256](https://github.com/MaiklGureev/DroidDebugHunterByCompose/releases).
 

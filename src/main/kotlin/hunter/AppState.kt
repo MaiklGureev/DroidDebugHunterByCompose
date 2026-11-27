@@ -11,8 +11,9 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 enum class Page(private val labelKey: String, private val captionKey: String) {
+    Connection("Connection", "Android device and traffic capture"),
     Traffic("Traffic", "HTTP requests and responses"),
-    Devices("Devices", "USB, Wi-Fi and Frida"),
+    Devices("Devices", "Device diagnostics"),
     Apps("Apps", "Processes, permissions and data"),
     Logcat("Logcat", "Live Android logs"),
     Tools("ADB tools", "Device network and diagnostics"),
@@ -32,11 +33,11 @@ data class Confirmation(val title: String, val text: String, val run: () -> Unit
 
 data class CaptureCheck(val title: String, val ready: Boolean?, val detail: String)
 
-private data class FridaCheckTarget(
+private data class CaptureTarget(
     val config: Settings,
     val device: Device?,
     val app: AndroidApp?,
-    val mode: CaptureMode?,
+    val mode: CaptureMode,
 )
 
 class AppState {
@@ -47,7 +48,7 @@ class AppState {
     var initialized by mutableStateOf(false)
         private set
 
-    var page by mutableStateOf(Page.Traffic)
+    var page by mutableStateOf(Page.Connection)
     var palette by mutableStateOf(false)
     var status by mutableStateOf(tr("Preparing local resources…"))
     var error by mutableStateOf("")
@@ -83,10 +84,11 @@ class AppState {
         private set
 
     var logOptions by mutableStateOf(LogOptions())
-    var modeChecks by mutableStateOf(emptyList<CaptureCheck>())
-        private set
+    private var captureChecks by mutableStateOf<Pair<CaptureTarget, List<CaptureCheck>>?>(null)
+    val modeChecks
+        get() = captureChecks?.takeIf { it.first == captureTarget() }?.second.orEmpty()
 
-    private var fridaCheck by mutableStateOf<Pair<FridaCheckTarget, FridaDiagnosis>?>(null)
+    private var fridaCheck by mutableStateOf<Pair<CaptureTarget, FridaDiagnosis>?>(null)
 
     var toolDirectoryWarnings by mutableStateOf(emptyList<String>())
         private set
@@ -464,14 +466,29 @@ class AppState {
                 status = tr("Capture stopped")
                 return@task
             }
-            val target = serial()
+            val device = selectedDevice?.takeIf { it.state == "device" }
+            if (device == null) {
+                page = Page.Connection
+                status = tr("Select an authorized Android device")
+                return@task
+            }
+            if (mode != CaptureMode.Proxy && selectedApp == null) {
+                page = Page.Traffic
+                status = tr("Select an app")
+                return@task
+            }
+            if (mode.isFrida && fridaDiagnosis()?.next != FridaNext.Ready &&
+                refreshFridaDiagnosis()?.next != FridaNext.Ready) {
+                page = Page.Connection
+                return@task
+            }
             val config = settings
             val selectedMode = mode
             lateinit var owned: CaptureSession
             owned =
                 CaptureSession(
                     config,
-                    target,
+                    device.serial,
                     selectedMode,
                     selectedApp,
                     scope,
@@ -642,6 +659,7 @@ class AppState {
             trafficBytes += imported.sumOf { it.memoryCost() }
             trimTraffic()
             rebuildIndex()
+            page = Page.Traffic
             status = tr("Imported {0} requests · {1}", imported.size, file.name)
         }
 
@@ -760,27 +778,25 @@ class AppState {
             }
             ?.sortedBy { it.name } ?: emptyList()
 
-    private fun fridaTarget(forCapture: Boolean) =
-        FridaCheckTarget(settings, selectedDevice,
-            if (forCapture) selectedApp else null, if (forCapture) mode else null)
+    private fun captureTarget() = CaptureTarget(settings, selectedDevice, selectedApp, mode)
 
-    fun fridaDiagnosis(forCapture: Boolean): FridaDiagnosis? =
-        fridaCheck?.takeIf { it.first == fridaTarget(forCapture) }?.second
+    fun fridaDiagnosis(): FridaDiagnosis? =
+        fridaCheck?.takeIf { it.first == captureTarget() }?.second
 
-    private suspend fun refreshFridaDiagnosis(forCapture: Boolean) {
+    private suspend fun refreshFridaDiagnosis(): FridaDiagnosis? {
         fridaCheck = null
-        val target = fridaTarget(forCapture)
+        val target = captureTarget()
         val result = diagnoseFrida(target.config, target.device, target.app, target.mode, ::report)
-        if (fridaTarget(forCapture) == target) {
-            fridaCheck = target to result
-            status = tr("Frida check completed")
-        }
+        if (captureTarget() != target) return null
+        fridaCheck = target to result
+        status = tr("Frida check completed")
+        return result
     }
 
-    fun checkFrida(forCapture: Boolean) =
-        task(tr("Checking Frida connection")) { refreshFridaDiagnosis(forCapture) }
+    fun checkFrida() =
+        task(tr("Checking Frida connection")) { refreshFridaDiagnosis() }
 
-    fun installFrida(file: File? = null, forCapture: Boolean = false) =
+    fun installFrida(file: File? = null) =
         task(tr("Installing frida-server")) {
             fridaCheck = null
             val target = serial()
@@ -806,10 +822,10 @@ class AppState {
                 tr("Server version is {0}; {1} is required", version, clientVersion)
             }
             status = tr("frida-server {0} ({1}) installed", version, arch)
-            refreshFridaDiagnosis(forCapture)
+            refreshFridaDiagnosis()
         }
 
-    fun startFrida(forCapture: Boolean = false) =
+    fun startFrida() =
         task(tr("Starting frida-server")) {
             fridaCheck = null
             check(fridaPid == null) { tr("This session has already started the server") }
@@ -840,7 +856,7 @@ class AppState {
                 tr("frida-server exited. Check root and port 27042.")
             }
             status = tr("frida-server active · PID {0}", pid)
-            refreshFridaDiagnosis(forCapture)
+            refreshFridaDiagnosis()
         }
 
     fun ownsFridaServer() = fridaPid != null
@@ -900,16 +916,14 @@ class AppState {
 
     fun checkCapture() {
         if (mode.isFrida) {
-            checkFrida(forCapture = true)
+            checkFrida()
             return
         }
         task(tr("Checking capture readiness")) {
-            val config = settings
-            val selectedMode = mode
-            val app = selectedApp
-            val target = selectedDevice
+            val context = captureTarget()
+            val (config, target, app, selectedMode) = context
             val checks = mutableListOf<CaptureCheck>()
-            modeChecks = emptyList()
+            captureChecks = null
             suspend fun check(title: String, block: suspend () -> String) {
                 try {
                     checks += CaptureCheck(title, true, block())
@@ -918,7 +932,7 @@ class AppState {
                 } catch (e: Exception) {
                     checks += CaptureCheck(title, false, e.message ?: tr("Unavailable"))
                 }
-                modeChecks = checks.toList()
+                captureChecks = context to checks.toList()
             }
             val adb = Adb(config)
             check("ADB") { adb.run("version").requireSuccess().lineSequence().first() }
@@ -977,7 +991,7 @@ class AppState {
                         ),
                     )
             }
-            modeChecks = checks.toList()
+            captureChecks = context to checks.toList()
             status =
                 if (checks.any { it.ready == false })
                     tr("Startup prerequisites failed: see the checklist")

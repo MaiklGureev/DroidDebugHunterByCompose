@@ -27,6 +27,7 @@ import kotlinx.coroutines.withContext
 
 fun Page.icon(): ImageVector =
     when (this) {
+        Page.Connection -> Icons.Outlined.Cable
         Page.Traffic -> Icons.Outlined.SwapVert
         Page.Devices -> Icons.Outlined.Devices
         Page.Apps -> Icons.Outlined.Apps
@@ -98,7 +99,7 @@ fun HunterApp(model: AppState, closing: Boolean) {
                             color = Muted,
                             letterSpacing = 1.sp,
                         )
-                        Page.entries.take(5).forEach {
+                        Page.entries.takeWhile { it != Page.Settings }.forEach {
                             NavigationItem(it, model.page == it) { model.page = it }
                         }
                         Spacer(Modifier.weight(1f))
@@ -155,21 +156,23 @@ fun HunterApp(model: AppState, closing: Boolean) {
                                 )
                                 Text(model.page.caption, fontSize = 11.sp, color = Muted)
                             }
-                            Box(Modifier.widthIn(max = 410.dp).weight(.75f)) {
-                                Choice(
-                                    model.selectedDevice,
-                                    model.devices.map { it as Device? },
-                                    { it?.label ?: tr("Select a device") },
-                                    { it?.let(model::selectDevice) },
-                                    enabled = model.busy.isEmpty(),
-                                )
-                            }
-                            MiniIcon(
-                                Icons.Outlined.Refresh,
-                                tr("Refresh devices"),
-                                !model.refreshing && model.busy.isEmpty(),
-                            ) {
-                                model.task(tr("Refreshing devices")) { model.refreshDevices(true) }
+                            if (model.page != Page.Connection && model.page != Page.Traffic) {
+                                Box(Modifier.widthIn(max = 410.dp).weight(.75f)) {
+                                    Choice(
+                                        model.selectedDevice,
+                                        model.devices.map { it as Device? },
+                                        { it?.label ?: tr("Select a device") },
+                                        { it?.let(model::selectDevice) },
+                                        enabled = model.busy.isEmpty(),
+                                    )
+                                }
+                                MiniIcon(
+                                    Icons.Outlined.Refresh,
+                                    tr("Refresh devices"),
+                                    !model.refreshing && model.busy.isEmpty(),
+                                ) {
+                                    model.task(tr("Refreshing devices")) { model.refreshDevices(true) }
+                                }
                             }
                             MiniIcon(Icons.Outlined.Search, tr("Commands · Ctrl+K")) {
                                 model.palette = true
@@ -209,6 +212,7 @@ fun HunterApp(model: AppState, closing: Boolean) {
                             }
                         Box(Modifier.weight(1f)) {
                             when (model.page) {
+                                Page.Connection -> ConnectionScreen(model)
                                 Page.Traffic -> TrafficScreen(model)
                                 Page.Devices -> DevicesScreen(model)
                                 Page.Apps -> AppsScreen(model)
@@ -521,7 +525,6 @@ fun TrafficScreen(model: AppState) {
     var pkg by remember { mutableStateOf("") }
     var identity by remember { mutableStateOf("") }
     var selectedId by remember { mutableStateOf<String?>(null) }
-    var setup by remember { mutableStateOf(false) }
     var sort by remember { mutableStateOf(TrafficSort.Newest) }
     val snapshot = model.exchanges.toList()
     val visible by
@@ -543,8 +546,6 @@ fun TrafficScreen(model: AppState) {
         }
     val selected = snapshot.firstOrNull { it.id == selectedId }
     val enabled = model.busy.isEmpty() && model.initialized
-    val fridaSetupNeeded = !model.capturing && model.mode.isFrida &&
-        model.fridaDiagnosis(forCapture = true)?.next != FridaNext.Ready
     fun openDetails(e: Exchange) {
         if (e.id !in model.detailIds) model.detailIds += e.id
     }
@@ -558,40 +559,24 @@ fun TrafficScreen(model: AppState) {
     }
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Surface(shape = RoundedCornerShape(10.dp), border = BorderStroke(1.dp, Line)) {
-            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    Choice(
-                        model.mode,
-                        CaptureMode.entries,
-                        { it.title },
-                        { model.mode = it },
-                        Modifier.width(190.dp),
-                        enabled && !model.capturing,
-                    )
-                    AppPicker(model, Modifier.weight(1f), enabled && !model.capturing)
-                    Action(
-                        when {
-                            model.capturing -> tr("Stop")
-                            fridaSetupNeeded -> tr("Check readiness")
-                            else -> tr("Start capture")
-                        },
-                        if (model.capturing) Icons.Outlined.Stop else Icons.Outlined.PlayArrow,
-                        enabled && (model.capturing || fridaSetupNeeded ||
-                            model.selectedDevice?.state == "device"),
-                        primary = true,
-                        danger = model.capturing,
-                    ) {
-                        if (fridaSetupNeeded) {
-                            setup = true
-                            model.checkFrida(forCapture = true)
-                        } else model.toggleCapture()
-                    }
-                    MiniIcon(Icons.Outlined.Tune, tr("Configure capture")) { setup = true }
-                }
-                Text(model.mode.hint, color = Muted, fontSize = 11.sp)
+            Row(
+                Modifier.padding(14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                AppPicker(model, Modifier.weight(1f), enabled && !model.capturing)
+                Action(
+                    when {
+                        model.capturing -> tr("Stop")
+                        model.selectedDevice?.state != "device" -> tr("Set up connection")
+                        else -> tr("Start capture")
+                    },
+                    if (model.capturing) Icons.Outlined.Stop else Icons.Outlined.PlayArrow,
+                    enabled,
+                    primary = true,
+                    danger = model.capturing,
+                    onClick = model::toggleCapture,
+                )
             }
         }
         Row(
@@ -801,143 +786,9 @@ fun TrafficScreen(model: AppState) {
             if (model.capturing) Pill("● LIVE")
         }
     }
-    if (setup) CaptureSetup(model) { setup = false }
 }
 
 @Composable
 private fun TableCell(text: String, width: Int) {
     Text(text, Modifier.width(width.dp), fontSize = 10.sp, color = Muted)
-}
-
-@Composable
-fun CaptureSetup(model: AppState, dismiss: () -> Unit) {
-    val enabled = model.busy.isEmpty() && !model.capturing
-    val frida = model.mode.isFrida
-    val fridaReady = model.fridaDiagnosis(forCapture = true)?.next == FridaNext.Ready
-    AlertDialog(
-        onDismissRequest = dismiss,
-        title = { Text(tr("Capture setup")) },
-        text = {
-            Column(
-                Modifier.width(720.dp).heightIn(max = 580.dp).verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                Text(tr("1. Device and app"), fontWeight = FontWeight.SemiBold)
-                Text(
-                    model.selectedDevice?.label
-                        ?: tr("Connect a phone over USB, allow debugging and select the device."),
-                    color = Muted,
-                )
-                AppPicker(model, Modifier.fillMaxWidth(), enabled)
-                Choice(
-                    model.mode,
-                    CaptureMode.entries,
-                    { it.title },
-                    { model.mode = it },
-                    Modifier.fillMaxWidth(),
-                    enabled,
-                )
-                Text(model.mode.hint, color = Muted)
-                Divider(color = Line)
-                if (frida) {
-                    Text("2. Frida", fontWeight = FontWeight.SemiBold)
-                    Check(
-                        tr("Rootless: debuggable + run-as + Gadget"),
-                        model.settings.gadget,
-                        enabled,
-                    ) {
-                        model.updateSettings(model.settings.copy(gadget = it))
-                    }
-                    Check(tr("Launch app at startup"), model.settings.spawn, enabled) {
-                        model.updateSettings(model.settings.copy(spawn = it))
-                    }
-                    FridaConnectionPanel(model, forCapture = true, enabled = enabled, dismiss = dismiss)
-                } else {
-                    Text(tr("2. HTTPS / certificate"), fontWeight = FontWeight.SemiBold)
-                    Text(
-                        tr(
-                            "Prepare the CA, send it to Android and install it manually as a CA certificate. The app must trust user CAs."
-                        ),
-                        color = Muted,
-                    )
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Action(tr("Prepare CA"), enabled = enabled) { model.prepareCapture(false) }
-                        Action(
-                            tr("Send CA"),
-                            enabled = model.busy.isEmpty(),
-                            onClick = model::sendCa,
-                        )
-                    }
-                    if (model.mode == CaptureMode.Vpn) {
-                        Text("3. WireGuard", fontWeight = FontWeight.SemiBold)
-                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Field(
-                                model.settings.vpnHost,
-                                { model.updateSettings(model.settings.copy(vpnHost = it)) },
-                                tr("Computer IP / DNS"),
-                                Modifier.weight(1f),
-                                enabled,
-                            )
-                            Field(
-                                model.settings.vpnPort,
-                                { model.updateSettings(model.settings.copy(vpnPort = it)) },
-                                tr("UDP port"),
-                                Modifier.width(130.dp),
-                                enabled,
-                            )
-                        }
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Action(tr("Prepare profile"), enabled = enabled) {
-                                model.prepareCapture(true)
-                            }
-                            Action(
-                                tr("Send to WireGuard"),
-                                enabled = model.busy.isEmpty(),
-                                onClick = model::sendVpn,
-                            )
-                        }
-                        Text(
-                            tr(
-                                "Allow the UDP port in your firewall. WireGuard: + → Import from file → Download/ddh.conf. Enable the tunnel after starting the server. Allow Remote control for automatic shutdown."
-                            ),
-                            color = Muted,
-                            fontSize = 11.sp,
-                        )
-                    }
-                }
-                Divider(color = Line)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    if (!frida) {
-                        Action(
-                            tr("Check readiness"),
-                            enabled = model.busy.isEmpty(),
-                            onClick = model::checkCapture,
-                        )
-                    }
-                    Action(tr("User guide")) {
-                        model.page = Page.Help
-                        dismiss()
-                    }
-                }
-                if (!frida) model.modeChecks.forEach { CheckResult(it) }
-                if (model.error.isNotEmpty()) Text(model.error, color = MaterialTheme.colors.error)
-                if (model.busy.isNotEmpty()) LinearProgressIndicator(Modifier.fillMaxWidth())
-            }
-        },
-        confirmButton = {
-            TextButton(
-                {
-                    dismiss()
-                    model.toggleCapture()
-                },
-                enabled =
-                    model.busy.isEmpty() &&
-                        (model.capturing ||
-                            (model.selectedDevice?.state == "device" && (!frida || fridaReady))),
-            ) {
-                Text(if (model.capturing) tr("Stop") else tr("Start capture"))
-            }
-        },
-        dismissButton = { TextButton(dismiss) { Text(tr("Close")) } },
-    )
 }

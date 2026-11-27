@@ -12,7 +12,7 @@ Windows, macOS and Linux need their own ADB/Python/wheels. Android server/Gadget
 
 ## 2. Connect Android
 
-Open **Devices → Connect Android** and choose **USB**, **Wi-Fi**, or **Emulator**.
+Open **Connection → Connect Android** and choose **USB**, **Wi-Fi**, or **Emulator**.
 
 Enable Developer options and USB debugging. Connect a data-capable cable, unlock the phone and confirm the computer's RSA key. Refresh devices and select a row in `device` state. For `unauthorized`, confirm the phone prompt; for `offline`, check cable/debugging and reconnect. Linux may need distribution udev configuration; Windows may need the manufacturer's USB driver.
 
@@ -20,11 +20,11 @@ Android 11+: enable wireless debugging. On the **Wi-Fi** card, enter the pairing
 
 For an Android Studio emulator, start the virtual device in Device Manager, wait for Android to boot, and refresh from the **Emulator** card. Use **Wi-Fi** for emulators that provide an ADB network address.
 
-Refresh Apps (`Приложения`) and select the current Android profile's package. Refresh again after switching profiles. UID is not PID; App ID = UID % 100000. See [ADB operations](ADB_TOOLS.en.md).
+On **Traffic**, refresh the app list and select the current Android profile's package. Refresh again after switching profiles. UID is not PID; App ID = UID % 100000. See [ADB operations](ADB_TOOLS.en.md).
 
 ## 3. Choose a mode
 
-Open capture settings beside Start on Traffic (`Трафик`). Check readiness (`Проверить готовность`) validates tools and target. CA installation/trust, profile import and VPN consent are manual Android steps. Trigger a fresh network action in the target app to validate actual capture.
+Choose a capture method on **Connection**. For Frida or WireGuard, select the target app on **Traffic** before preparing the mode. Check readiness on **Connection**, then start capture on **Traffic**. CA installation/trust, profile import and VPN consent are manual Android steps. Trigger a fresh network action in the target app to validate actual capture.
 
 ### HTTP(S) proxy
 
@@ -36,7 +36,7 @@ If HTTP works but HTTPS fails, check CA trust and your debug APK's pinning. If n
 
 ### Frida · OkHttp with root
 
-Open **Check Frida connection** in capture settings or Devices. The checklist shows the active Python Frida version, device ABI, installed server version when available, and the result of a real Frida request through a temporary ADB forward. An independently started server can respond without exposing its exact version. Follow the proposed action to prepare tools, install or start the matching server, or choose an app. Confirm root access on Android when starting the server. `adb root` works on supported emulators/debug firmware. The server listens on Android `127.0.0.1:27042`.
+Open **Check Frida connection** in the Frida block on **Connection**. The checklist shows the active Python Frida version, device ABI, installed server version when available, and the result of a real Frida request through a temporary ADB forward. An independently started server can respond without exposing its exact version. Follow the proposed action to prepare tools, install or start the matching server, or choose an app. Confirm root access on Android when starting the server. `adb root` works on supported emulators/debug firmware. The server listens on Android `127.0.0.1:27042`.
 
 Select a package, OkHttp mode and optionally Launch app at startup (`Запустить приложение при старте`). Disable the Gadget option when using the root-server scenario. Start capture and repeat the network action from process startup. Disable launch-at-start to attach to a running app.
 
