@@ -1,5 +1,11 @@
 package hunter
 
+import hunter.features.help.Markdown
+import hunter.features.help.MarkdownLocation
+import hunter.features.help.MarkdownTarget
+import hunter.features.help.children
+import hunter.features.help.isMarkdownFile
+import hunter.features.help.resolveMarkdownLink
 import java.io.File
 import java.nio.file.Path
 import kotlin.test.*

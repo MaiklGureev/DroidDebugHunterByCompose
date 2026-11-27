@@ -1,5 +1,12 @@
 package hunter
 
+import hunter.core.HostPlatform
+import hunter.core.Processes
+import hunter.core.StreamingProcess
+import hunter.core.flag
+import hunter.core.json
+import hunter.core.parseObject
+import hunter.core.text
 import java.io.File
 import java.nio.file.Path
 import java.util.concurrent.TimeUnit

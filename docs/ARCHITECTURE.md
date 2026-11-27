@@ -2,13 +2,15 @@
 
 **English** | [Русский](ARCHITECTURE.ru.md)
 
+Kotlin sources live under `src/main/kotlin/hunter`. The `app` package coordinates screens and sessions, `core` contains platform, process, resource and localization utilities, and `ui` contains shared Compose components. Feature packages under `features` cover Android, connection, traffic, tools, Logcat, settings and help. Feature-specific Compose code lives in each feature's `ui` package.
+
 - `AppState`: screen state, SupervisorJob + Main, session ownership, event queues and batched UI updates every 100 ms.
 - `Processes`: ProcessBuilder arguments without an intermediate shell, concurrent bounded stdout/stderr reads, timeouts, and owned process-tree termination/reaping on cancellation.
 - `Adb`: fixed commands, remote-shell escaping, current Android profile/UID checks, app data/permissions and ELF/ABI validation.
 - `CaptureSession`: one Python/Frida client, `ready` handshake, `DDH_HTTP_EVENT:` protocol, owned ADB forwards/reverses and a CA/VPN store lock.
 - `ProxyLease`: snapshots all five system proxy settings and restores them only while they remain unchanged/owned by the session.
 - `LogcatSession`: ADB stream, firmware/UID capability checks, target revalidation every five seconds and termination on profile changes.
-- `Models`: immutable data, HAR import/export, exact body bytes, shell-specific cURL, log parsing/filtering/export.
+- `TrafficModels` and `LogcatModels`: immutable data, HAR import/export, exact body bytes, shell-specific cURL, and log parsing/filtering/export.
 - Compose UI: virtualized lists, separate result/detail windows, shared device/app selection, settings and offline help.
 
 The UI performs no blocking I/O. Long commands run on IO; parsing/filtering runs on Default. Coroutine cancellation releases resources. NonCancellable is reserved for bounded termination/restoration.
