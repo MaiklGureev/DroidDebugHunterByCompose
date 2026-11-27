@@ -38,7 +38,6 @@ fun ConnectionScreen(model: AppState) {
     val connected = model.selectedDevice?.state == "device"
     val scroll = rememberScrollState()
     val scope = rememberCoroutineScope()
-    var showToolSettings by remember { mutableStateOf(false) }
     val androidConnection = remember { BringIntoViewRequester() }
     val captureTools = remember { BringIntoViewRequester() }
     LaunchedEffect(model.initialized, model.settings.toolConfiguration(), model.busy.isEmpty()) {
@@ -91,8 +90,6 @@ fun ConnectionScreen(model: AppState) {
             ConnectionToolsPanel(
                 model,
                 model.mode.toolComponents(model.settings.gadget),
-                showToolSettings,
-                onExpand = { showToolSettings = !showToolSettings },
                 modifier = Modifier.bringIntoViewRequester(captureTools),
             )
 
@@ -115,7 +112,6 @@ fun ConnectionScreen(model: AppState) {
                             scope.launch { androidConnection.bringIntoView(Rect(0f, 0f, 1f, 32f)) }
                         },
                         configureTools = {
-                            showToolSettings = true
                             scope.launch { captureTools.bringIntoView(Rect(0f, 0f, 1f, 32f)) }
                         },
                     )

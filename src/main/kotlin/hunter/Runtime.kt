@@ -130,10 +130,7 @@ data class Settings(
             p.setProperty("tools.${platform.key}.python", python)
             val setupKey = "tools.${platform.key}.setup."
             mapOf(
-                    "mode" to setup.mode.name,
                     "method" to setup.method.name,
-                    "chosen" to setup.chosen.toString(),
-                    "methodChosen" to setup.methodChosen.toString(),
                     "offline" to setup.offline.toString(),
                     "cache" to setup.cache,
                     "adbArchive" to setup.adbArchive,
@@ -194,12 +191,6 @@ data class Settings(
                 language = UiLanguage.fromCode(s("language")),
                 setup =
                     ToolSetupOptions(
-                        chosen = s("tools.${platform.key}.setup.chosen").toBoolean(),
-                        methodChosen = s("tools.${platform.key}.setup.methodChosen").toBoolean(),
-                        mode =
-                            SetupMode.entries.firstOrNull {
-                                it.name == s("tools.${platform.key}.setup.mode")
-                            } ?: SetupMode.Guided,
                         method =
                             SetupMethod.entries.firstOrNull {
                                 it.name == s("tools.${platform.key}.setup.method")

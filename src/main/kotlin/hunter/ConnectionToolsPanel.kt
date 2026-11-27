@@ -8,6 +8,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
@@ -16,18 +17,22 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.*
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.desktop.ui.tooling.preview.Preview
+import java.io.File
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @Composable
 fun ConnectionToolsPanel(
     model: AppState,
     captureComponents: List<String>,
-    expanded: Boolean,
-    onExpand: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val config = model.settings
@@ -49,7 +54,7 @@ fun ConnectionToolsPanel(
     val valid = draft.tools.isNotBlank() && ToolPolicy.ids.all { ToolPolicy.validVersion(draft.setup.version(it)) }
     val editable = model.canPrepareTools
     val checkingAllowed = model.initialized && model.busy.isEmpty()
-    val needsPython = selected.any { it in listOf("python", "capture", "proxy", "server", "gadget") }
+    val scope = rememberCoroutineScope()
 
     fun apply() {
         model.updateSettings(model.settings.copy(
@@ -60,61 +65,27 @@ fun ConnectionToolsPanel(
         ))
     }
 
-    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row(
-            Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Text(tr("Tool setup"), Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
-            ToolAction(
-                tr(if (expanded) "Hide tool settings" else "Tool settings"),
-                Icons.Outlined.Settings,
-                onClick = onExpand,
-            )
-        }
-        Text(
-            listOfNotNull(
-                tr(draft.setup.mode.key),
-                tr(draft.setup.method.key).takeIf { needsPython && draft.setup.mode != SetupMode.Manual },
-                tr("Offline").takeIf { draft.setup.offline },
-            ).joinToString(" · "),
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            style = MaterialTheme.typography.bodySmall,
-        )
+    Column(
+        modifier.fillMaxWidth().onPreviewKeyEvent { event ->
+            if (editable && valid && event.type == KeyEventType.KeyDown &&
+                event.isPlatformShortcutPressed && event.key == Key.S) {
+                apply()
+                true
+            } else false
+        },
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        ToolSetupPanel(model, draft, { draft = it }, ::apply, editable, valid)
+        HorizontalDivider()
 
-        fun toggle(id: String, checked: Boolean) {
-            selection = if (checked) selection + id else selection - id
+        fun prepare(ids: List<String>) {
+            apply()
+            model.setupTools(ids)
         }
-        Text(tr("ADB software"), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelMedium)
-        for (id in components) {
-            if (id == captureComponents.firstOrNull()) {
-                Text(tr("Capture software"), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelMedium)
-            }
-            val detected = toolFindingIds(id).map { findings[it] ?: ToolFinding(it, null) }
-            val step = model.toolSteps[id]?.takeIf { it.state != ToolStepState.Prepared }
-            ToolListRow(
-                id, detected, step, findings.isNotEmpty(), draft.setup, id in selection, id in optional,
-                editable, valid, { toggle(id, it) }, { sources = listOf(id) },
-            ) {
-                val details = detected.joinToString("\n\n") { it.summary }
-                val text = if (step == null) details else "$details\n\n${step.detail}"
-                model.outputs += OutputWindow(title = componentTitle(id), text = text)
-            }
-        }
-
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            if (draft.setup.mode == SetupMode.Manual) {
-                ToolAction(tr("Download links / folders"), Icons.Outlined.Link,
-                    valid && selected.isNotEmpty(), primary = true) {
-                    sources = selected
-                }
-            } else {
-                ToolAction(tr("Prepare selected ({0})", selected.size), Icons.Outlined.Download,
-                    editable && valid && selected.isNotEmpty(), primary = true) {
-                    apply()
-                    model.setupTools(selected)
-                }
+            ToolAction(tr("Prepare selected ({0})", selected.size), Icons.Outlined.Download,
+                editable && valid && selected.isNotEmpty()) {
+                prepare(selected)
             }
             ToolAction(tr("Check tools"), Icons.Outlined.Refresh, checkingAllowed && (!editable || valid)) {
                 if (editable) apply()
@@ -129,9 +100,76 @@ fun ConnectionToolsPanel(
                 ToolAction(tr("Select unfinished"), enabled = editable) { selection = unfinished.toSet() }
             }
         }
-        if (needsPython && "python" !in selected && draft.setup.mode != SetupMode.Manual) {
-            Text(tr("Python is prepared when a selected component needs it."), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+
+        for (id in components) key(id) {
+            if (id == "adb" || id == captureComponents.firstOrNull()) {
+                Text(
+                    tr(if (id == "adb") "ADB software" else "Capture software"),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.labelLarge,
+                )
+                if (id != "adb") {
+                    Text(
+                        tr("Python is prepared when a selected component needs it."),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+            }
+            val detected = toolFindingIds(id).map { findings[it] ?: ToolFinding(it, null) }
+            val step = model.toolSteps[id]?.takeIf { it.state != ToolStepState.Prepared }
+            val destination = File(draft.tools, ToolLayout.folder(id)).absoluteFile
+            val manualHint = if (valid) ToolLayout.sources(draft, id).firstOrNull()?.formatKey else null
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                ToolListRow(
+                    id, detected, step, findings.isNotEmpty(), draft.setup,
+                    id in selection, id in optional, editable,
+                    onChecked = { selection = if (it) selection + id else selection - id },
+                ) {
+                    val details = detected.joinToString("\n\n") { it.summary }
+                    val text = if (step == null) details else "$details\n\n${step.detail}"
+                    model.outputs += OutputWindow(title = componentTitle(id), text = text)
+                }
+                SelectionContainer {
+                    Text(
+                        tr("Bundle folder: {0}", destination.path.takeIf { draft.tools.isNotBlank() } ?: "—"),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+                ToolComponentOptions(id, draft, { draft = it }, editable)
+                manualHint?.let {
+                    Text(tr(it), color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall)
+                }
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    ToolAction(tr("Open destination folder"), Icons.Outlined.FolderOpen,
+                        enabled = draft.tools.isNotBlank()) {
+                        scope.launch {
+                            try {
+                                withContext(Dispatchers.IO) {
+                                    check(destination.isDirectory || destination.mkdirs()) {
+                                        tr("Could not create directory: {0}", destination.path)
+                                    }
+                                }
+                                openFile(model, destination)
+                            } catch (e: CancellationException) {
+                                throw e
+                            } catch (e: Exception) {
+                                model.error = e.message.orEmpty()
+                            }
+                        }
+                    }
+                    ToolAction(tr("Manual download"), Icons.Outlined.Link, valid) { sources = listOf(id) }
+                    ToolAction(tr("Download and prepare"), Icons.Outlined.Download,
+                        editable && valid, primary = true) {
+                        prepare(listOf(id))
+                    }
+                }
+            }
+            HorizontalDivider()
         }
+
         model.setupProgress?.let { progress ->
             Text("${progress.phase} · ${progress.detail}", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall)
             val fraction = progress.fraction
@@ -147,10 +185,6 @@ fun ConnectionToolsPanel(
                 model.outputs += OutputWindow(title = tr("Setup log"), text = model.setupLiveLog)
             }
         }
-        if (expanded) {
-            HorizontalDivider()
-            ToolSetupPanel(model, draft, { draft = it }, ::apply, components, selected, editable, valid)
-        }
     }
     if (sources.isNotEmpty()) ToolSourcesDialog(model, draft, sources) { sources = emptyList() }
 }
@@ -165,9 +199,7 @@ private fun ToolListRow(
     checked: Boolean,
     optional: Boolean,
     enabled: Boolean,
-    showSources: Boolean,
     onChecked: (Boolean) -> Unit,
-    onSources: () -> Unit,
     onDetails: () -> Unit,
 ) {
     val scheme = MaterialTheme.colorScheme
@@ -214,9 +246,7 @@ private fun ToolListRow(
             Text(status, Modifier.padding(horizontal = 4.dp), style = MaterialTheme.typography.labelSmall)
         }
         ToolAction(tr("Details"), Icons.Outlined.Info, onClick = onDetails)
-        ToolAction(tr("Files"), Icons.Outlined.FolderOpen, showSources, onClick = onSources)
     }
-    HorizontalDivider()
 }
 
 @Preview
@@ -235,12 +265,12 @@ private fun ToolListPreview(dark: Boolean) {
                 val options = ToolSetupOptions()
                 ToolListRow(
                     "adb", listOf(ToolFinding("adb", options.version("adb"))), null,
-                    true, options, true, false, true, true, {}, {}, {},
+                    true, options, true, false, true, {}, {},
                 )
                 ToolListRow(
                     "python", listOf(ToolFinding("python", null)),
                     ToolStep("python", ToolStepState.Skipped, tr("Prepare Python first, or use the download links for manual setup.")),
-                    true, options, false, false, true, true, {}, {}, {},
+                    true, options, false, false, true, {}, {},
                 )
             }
         }

@@ -31,7 +31,6 @@ class ToolchainTest {
             adb = File(root, "unavailable-adb").path,
             python = File(root, "unavailable-python").path,
             setup = ToolSetupOptions(
-                mode = SetupMode.Automatic,
                 method = SetupMethod.Target,
                 offline = true,
                 adbArchive = File(root, "missing-platform-tools.zip").path,
@@ -247,18 +246,16 @@ class ToolchainTest {
         val file = dir.resolve("settings.properties").toFile()
         val options =
             ToolSetupOptions(
-                SetupMode.Automatic,
-                SetupMethod.Venv,
-                true,
-                "cache with spaces",
-                "local.zip",
-                "uv-custom",
-                ToolSetupOptions().versions + ("frida" to "18.0.0"),
-                chosen = true,
-                methodChosen = true,
+                method = SetupMethod.Venv,
+                offline = true,
+                cache = "cache with spaces",
+                adbArchive = "local.zip",
+                uv = "uv-custom",
+                versions = ToolSetupOptions().versions + ("frida" to "18.0.0"),
             )
         Settings(tools = dir.toString(), setup = options)
             .save(file, HostPlatform(HostOs.Windows, "x64"))
+        file.appendText("tools.windows-x64.setup.mode=Manual\ntools.windows-x64.setup.chosen=true\n")
         Settings(tools = dir.toString()).save(file, HostPlatform(HostOs.MacOS, "arm64"))
         assertEquals(options, Settings.load(file, HostPlatform(HostOs.Windows, "x64")).setup)
         assertEquals(
@@ -268,16 +265,9 @@ class ToolchainTest {
     }
 
     @Test
-    fun `automatic mode can fall back to a writable folder without privileges`(@TempDir dir: Path) {
+    fun `an invalid tools folder is rejected without replacing it`(@TempDir dir: Path) {
         val blocked = dir.resolve("a-file").toFile().apply { writeText("not a directory") }
-        val fallback = dir.resolve("user tools").toFile()
-        val messages = mutableListOf<String>()
-        assertEquals(
-            fallback.canonicalFile,
-            ToolProvisioner.writableRoot(blocked, fallback, messages::add),
-        )
-        assertTrue(messages.isNotEmpty())
-        assertFailsWith<IllegalStateException> { ToolProvisioner.writableRoot(blocked, null) {} }
+        assertFailsWith<IllegalStateException> { ToolProvisioner.writableRoot(blocked) }
         assertEquals("not a directory", blocked.readText())
     }
 
@@ -404,14 +394,10 @@ class ToolchainTest {
     }
 
     @Test
-    fun `manual mode cannot install anything`(@TempDir dir: Path) = runBlocking {
-        val config =
-            Settings(
-                tools = dir.resolve("must-not-exist").toString(),
-                setup = ToolSetupOptions(mode = SetupMode.Manual),
-            )
-        assertFailsWith<IllegalArgumentException> { ToolProvisioner.prepare(config, listOf("all"), {}, {}) }
-        assertFalse(File(config.tools).exists())
+    fun `viewing download instructions does not create files`(@TempDir dir: Path) {
+        val config = Settings(tools = dir.resolve("must-not-exist").toString())
         assertTrue(ToolProvisioner.plan(config, listOf("all")).contains(config.tools))
+        assertTrue(ToolLayout.sources(config, "adb").isNotEmpty())
+        assertFalse(File(config.tools).exists())
     }
 }

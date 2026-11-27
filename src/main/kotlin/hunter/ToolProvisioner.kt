@@ -28,7 +28,6 @@ object ToolProvisioner {
             appendLine(tr("Components: {0}", selected.joinToString { componentTitle(it) }))
             val method =
                 when {
-                    options.mode == SetupMode.Manual -> tr("Manual: no automatic installation")
                     selected.all { it == "adb" || it == "wireguard" } -> tr("Direct native archive (no Python)")
                     else -> tr(options.method.key)
                 }
@@ -42,12 +41,6 @@ object ToolProvisioner {
                     "No elevation, global pip installs or PATH changes. Android installation and permissions remain separate."
                 )
             )
-            if (options.mode == SetupMode.Automatic)
-                appendLine(
-                    tr(
-                        "Automatic: try another local setup method on failure; use the app data directory if the selected directory is not writable."
-                    )
-                )
             selected.flatMap(::toolFindingIds)
                 .map { if (it in listOf("server", "gadget")) "frida" else it }
                 .distinct().forEach { id ->
@@ -121,28 +114,18 @@ object ToolProvisioner {
         }
     }
 
-    fun writableRoot(preferred: File, fallback: File?, log: (String) -> Unit): File {
-        fun probe(root: File): File {
-            root.mkdirs()
-            val temporary = Files.createTempFile(root.toPath(), ".ddhc-write-", ".tmp")
+    fun writableRoot(directory: File): File =
+        try {
+            directory.mkdirs()
+            val temporary = Files.createTempFile(directory.toPath(), ".ddhc-write-", ".tmp")
             Files.delete(temporary)
-            return root.canonicalFile
-        }
-        return try {
-            probe(preferred)
+            directory.canonicalFile
         } catch (e: Exception) {
-            if (fallback == null || fallback.canonicalFile == preferred.canonicalFile)
-                throw IllegalStateException(
-                    tr(
-                        "Directory is not writable. Choose a user-owned folder: {0}",
-                        preferred.path,
-                    ),
-                    e,
-                )
-            log(tr("Directory is not writable; trying {0}", fallback.absolutePath))
-            probe(fallback)
+            throw IllegalStateException(
+                tr("Directory is not writable. Choose a user-owned folder: {0}", directory.path),
+                e,
+            )
         }
-    }
 
     suspend fun prepare(
         initial: Settings,
@@ -152,20 +135,9 @@ object ToolProvisioner {
     ): ToolPreparation {
         require(initial.tools.isNotBlank()) { tr("Choose a tool directory first.") }
         require(components.isNotEmpty())
-        require(initial.setup.mode != SetupMode.Manual) {
-            tr("Manual mode only checks tools and displays instructions.")
-        }
         ToolPolicy.validate(initial.setup.versions)
         val selected = expand(components)
-        val automatic = initial.setup.mode == SetupMode.Automatic
-        val root = withContext(Dispatchers.IO) {
-            writableRoot(
-                File(initial.tools),
-                if (automatic) File(AppFiles.data, "tools/${HostPlatform.current.key}")
-                else null,
-                log,
-            )
-        }
+        val root = withContext(Dispatchers.IO) { writableRoot(File(initial.tools)) }
         var config = initial.copy(tools = root.path)
         val steps = mutableListOf<ToolStep>()
         suspend fun step(name: String, block: suspend () -> Unit) {
@@ -191,28 +163,7 @@ object ToolProvisioner {
         }
 
         if ("adb" in selected) step("adb") {
-            suspend fun adbVersion() = ToolPolicy.adbVersion(
-                Adb(config).run("version", timeout = 10000).requireSuccess()
-            )
-            val alreadyMatches =
-                automatic && config.setup.adbArchive.isBlank() &&
-                    available { adbVersion() } == config.setup.version("adb")
-            if (alreadyMatches) {
-                log(tr("Using existing ADB: {0}", config.adbCommand))
-            } else {
-                try {
-                    config = config.copy(adb = ToolDownloads.installAdb(config, progress))
-                } catch (e: Exception) {
-                    currentCoroutineContext().ensureActive()
-                    if (e is CancellationException && e !is TimeoutCancellationException) throw e
-                    if (!automatic || e is SecurityException) throw e
-                    val existing = available { adbVersion() } ?: throw e
-                    log(tr("Using existing ADB: {0}", config.adbCommand))
-                    log(e.message.orEmpty())
-                    log(ToolPolicy.notice("adb", existing))
-                    throw e
-                }
-            }
+            config = config.copy(adb = ToolDownloads.installAdb(config, progress))
         }
 
         val assets = selected.filter { it in bundleComponents && it != "wireguard" }
@@ -223,7 +174,10 @@ object ToolProvisioner {
         var pythonReady = false
         if ("python" in selected || packagesRequested || (nativeRequested && helper == null)) {
             step("python") {
-                val interpreter = prepareInterpreter(config, automatic, progress, log)
+                val method = config.setup.method
+                progress(SetupProgress(tr("Preparing Python"), tr(method.key)))
+                log(tr("Trying setup method: {0}", tr(method.key)))
+                val interpreter = preparePython(config, method, progress, log)
                 config = config.copy(python = interpreter)
                 helper = interpreter
                 pythonReady = true
@@ -267,34 +221,6 @@ object ToolProvisioner {
             8000,
         ).requireSuccess()
         command
-    }
-
-    private suspend fun prepareInterpreter(
-        config: Settings,
-        automatic: Boolean,
-        progress: (SetupProgress) -> Unit,
-        log: (String) -> Unit,
-    ): String {
-        val methods = if (automatic) (listOf(config.setup.method) + SetupMethod.entries).distinct()
-            else listOf(config.setup.method)
-        val failures = mutableListOf<String>()
-        for (method in methods) {
-            try {
-                progress(SetupProgress(tr("Preparing Python"), tr(method.key)))
-                log(tr("Trying setup method: {0}", tr(method.key)))
-                return preparePython(config, method, progress, log)
-            } catch (e: Exception) {
-                currentCoroutineContext().ensureActive()
-                if (e is CancellationException && e !is TimeoutCancellationException) throw e
-                val failure = "${tr(method.key)}: ${e.message}"
-                failures += failure
-                log(failure)
-                if (e is SecurityException) throw e
-            }
-        }
-        error(failures.joinToString("\n") + "\n" + tr(
-            "Try a different method, select an existing Python, use offline files or choose another writable folder."
-        ))
     }
 
     private suspend fun prepareComponent(

@@ -87,4 +87,4 @@ cURL defaults to PowerShell on Windows and POSIX shell on macOS/Linux. Switch th
 
 macOS supports ⌘ alongside Ctrl: ⌘O for HAR, ⌘K for the command palette, ⌘C for selected log rows. Current builds are unsigned; Apple notarization is not configured.
 
-Setup modes, user-local installation, offline cache and target versions: [tool setup](DOWNLOADS.en.md).
+User-local installation, offline cache and target versions: [tool setup](DOWNLOADS.en.md).

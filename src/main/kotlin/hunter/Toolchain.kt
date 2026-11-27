@@ -48,12 +48,6 @@ data class ToolConfiguration(
 
 fun Settings.toolConfiguration() = ToolConfiguration(tools, adb, python, setup.versions)
 
-enum class SetupMode(val key: String) {
-    Manual("Manual setup"),
-    Guided("Guided setup"),
-    Automatic("Automatic setup"),
-}
-
 enum class SetupMethod(val key: String) {
     Managed("Portable Python via uv"),
     Venv("Existing Python + local venv"),
@@ -108,15 +102,12 @@ object ToolPolicy {
 }
 
 data class ToolSetupOptions(
-    val mode: SetupMode = SetupMode.Guided,
     val method: SetupMethod = SetupMethod.Managed,
     val offline: Boolean = false,
     val cache: String = "",
     val adbArchive: String = "",
     val uv: String = "",
     val versions: Map<String, String> = ToolPolicy.ids.associateWith(ToolPolicy::target),
-    val chosen: Boolean = false,
-    val methodChosen: Boolean = false,
 ) {
     fun version(id: String) = versions[id] ?: ToolPolicy.target(id)
 }

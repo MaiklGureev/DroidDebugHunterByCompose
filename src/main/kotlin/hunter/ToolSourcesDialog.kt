@@ -151,6 +151,12 @@ fun ToolSourcesDialog(model: AppState, config: Settings, components: List<String
                                 text = ToolLayout.structure(config),
                             )
                     }
+                    ToolAction(tr("Plan / manual instructions"), Icons.Outlined.Description) {
+                        model.outputs += OutputWindow(
+                            title = tr("Plan / manual instructions"),
+                            text = ToolProvisioner.plan(config, components),
+                        )
+                    }
                     ToolAction(tr("Open cache folder"), Icons.Outlined.FolderOpen) {
                         val cache =
                             File(

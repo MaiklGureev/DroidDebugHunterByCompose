@@ -21,17 +21,16 @@ The reference configuration is recorded in `tool-setup/tool-versions.json` (revi
 
 **Check** reports detected versions, executable/module paths, missing components and differences from targets. Other versions are not blocked solely for being different. Before capture, the relevant runtime versions are checked again and warnings are written to the journal. Frida server/Gadget selection follows the actually imported client version. Protocol mismatch, missing imports, unsupported APIs or incompatible binaries can still prevent an operation.
 
-## Three setup modes
+## Configure and download tools
 
-On **Connection**, the tool list groups ADB and the components for the current capture method. Each row shows its status and detected/selected versions. **Files** opens the download links and folders for that component. Open **Tool settings** to change paths, versions, the setup mode or the Python method.
+On **Connection**, each tool shows its status, versions, bundle folder and local options. ADB is shared across USB, Wi-Fi and Emulator. Choose the Python executable and method in the Python section. The shared tool directory and download cache are always visible.
 
-- **Manual:** select ADB/Python executables or PATH commands, use an existing venv or unpack official archives yourself. Check versions and open **Plan / manual instructions** for commands and package-manager alternatives. This mode installs nothing.
-- **Guided:** prepare the checked components with the selected method and versions. ADB can be downloaded and unpacked independently of Python.
-- **Automatic:** prepare the checked components and try alternative Python methods if needed. If the tools directory is read-only, try the app's user data folder. **Select required** checks ADB and the tools for the current capture method.
+- **Manual download:** open the component's sources, copy links and follow the placement instructions. Use **Check tools** after placing files or saving an executable path.
+- **Download and prepare:** let the app download and prepare this component in the selected folder. To prepare a batch, check the desired tools and click **Prepare selected**. Selecting a component or opening its links does not start a download.
 
-During a batch, a failed download leaves that component unfinished. Independent steps continue, including the standalone WireGuard APK if Python is unavailable. Steps that require a missing prerequisite are marked **Skipped**. To retry, click **Select unfinished**, then **Prepare selected**. For manual recovery, use **Files** in the affected row, then **Check tools** after placing the files.
+If a component fails, independent steps continue. For example, WireGuard can be prepared even when Python is unavailable. Steps with missing prerequisites are marked **Skipped**. To retry, use **Select unfinished**, then **Prepare selected**.
 
-Modes, methods, selected versions, offline/cache settings and executable paths are saved per OS/CPU profile.
+Installation methods, versions, offline/cache settings and executable paths are saved per OS/CPU profile.
 
 ## Installation methods and restricted computers
 
@@ -41,7 +40,7 @@ Modes, methods, selected versions, offline/cache settings and executable paths a
 
 All methods install packages into `frida-python/` and `proxy-python/`; the application adds those folders to `PYTHONPATH`. On a non-target interpreter or custom package versions, dependencies are resolved from package metadata rather than forcing the Python 3.14 snapshot. Import validation runs before replacing an existing component; a failed install preserves it.
 
-Choose a writable user folder or click **Use app data folder**. Automatic mode tries a fallback folder; guided mode asks you to choose it explicitly. If execution/downloads are restricted, try an approved existing interpreter/ADB, a local venv, another writable folder or approved offline files. The wizard does not elevate, run `sudo`, install drivers or change system policies. USB drivers/udev rules may require administrator assistance; Wi-Fi ADB is an alternative. Python package-manager examples are shown for manual use, including WinGet `--scope user`, Scoop and Homebrew; they may be unavailable or restricted.
+Choose a writable user folder or click **Use app data folder**. If execution/downloads are restricted, try an approved existing interpreter/ADB, a local venv, another writable folder or approved offline files. The wizard does not elevate, run `sudo`, install drivers or change system policies. USB drivers/udev rules may require administrator assistance; Wi-Fi ADB is an alternative. Python package-manager examples are shown for manual use, including WinGet `--scope user`, Scoop and Homebrew; they may be unavailable or restricted.
 
 Frida includes the h11/hpack dependencies for Native TLS decoding without the proxy package. Capture and proxy engines use separate Python package directories to avoid mixing dependency versions.
 
@@ -70,7 +69,7 @@ Use the chosen versions in filenames. Offline mode makes no download attempts. P
 
 ## Separate downloads and manual folder layout
 
-Check the Frida client, server and Gadget together for the full bundle, or choose individual components. **Files** opens versioned URLs with **Download file**, **Copy link**, **Open link** and **Open destination folder** actions. **Download file** saves the original archive or APK in the cache. Python package links open the files page for the selected version so you can choose compatible wheels and dependencies. **Copy all links** includes placement instructions.
+Check the Frida client, server and Gadget together for the full bundle, or choose individual components. **Manual download** opens versioned URLs with **Download file**, **Copy link**, **Open link** and **Open destination folder** actions. **Download file** saves the original archive or APK in the cache. Python package links open the files page for the selected version so you can choose compatible wheels and dependencies. **Copy all links** includes placement instructions.
 
 At startup the app tries to create missing component/cache directories. A read-only folder produces warnings without preventing startup or requesting elevation. **Check / create folders** retries after you choose another location. **Folder structure** shows your actual selected root and versions; you may create the same layout manually:
 
