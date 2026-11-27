@@ -39,6 +39,7 @@ fun ConnectionScreen(model: AppState) {
     val scroll = rememberScrollState()
     val scope = rememberCoroutineScope()
     var expandedTools by remember { mutableStateOf("") }
+    val androidConnection = remember { BringIntoViewRequester() }
     val captureTools = remember { BringIntoViewRequester() }
     LaunchedEffect(model.initialized, model.settings.toolConfiguration(), model.busy.isEmpty()) {
         if (model.initialized && model.busy.isEmpty() && model.toolFindings.isEmpty()) {
@@ -51,11 +52,6 @@ fun ConnectionScreen(model: AppState) {
             Modifier.fillMaxSize().padding(end = 12.dp).verticalScroll(scroll),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            AndroidConnectionWizard(model, idle)
-            ConnectionToolsPanel(
-                model, tr("ADB software"), listOf("adb"), expandedTools == "adb",
-                onExpand = { expandedTools = if (expandedTools == "adb") "" else "adb" },
-            )
             Panel(tr("Capture method"), modifier = Modifier.fillMaxWidth()) {
                 FlowRow(
                     Modifier.fillMaxWidth().selectableGroup(),
@@ -89,6 +85,13 @@ fun ConnectionScreen(model: AppState) {
                 }
                 Text(model.mode.hint, color = Muted)
             }
+            Box(Modifier.bringIntoViewRequester(androidConnection)) {
+                AndroidConnectionWizard(model, idle)
+            }
+            ConnectionToolsPanel(
+                model, tr("ADB software"), listOf("adb"), expandedTools == "adb",
+                onExpand = { expandedTools = if (expandedTools == "adb") "" else "adb" },
+            )
             ConnectionToolsPanel(
                 model, tr("Capture software"), model.mode.toolComponents(model.settings.gadget),
                 expandedTools == "capture",
@@ -111,7 +114,9 @@ fun ConnectionScreen(model: AppState) {
                     FridaConnectionPanel(
                         model,
                         editable,
-                        selectDevice = { scope.launch { scroll.animateScrollTo(0) } },
+                        selectDevice = {
+                            scope.launch { androidConnection.bringIntoView(Rect(0f, 0f, 1f, 32f)) }
+                        },
                         configureTools = {
                             expandedTools = "capture"
                             scope.launch { captureTools.bringIntoView(Rect(0f, 0f, 1f, 32f)) }
