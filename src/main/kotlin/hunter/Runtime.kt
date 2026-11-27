@@ -94,6 +94,7 @@ data class Settings(
     val gadget: Boolean = false,
     val language: UiLanguage = UiLanguage.default(),
     val setup: ToolSetupOptions = ToolSetupOptions(),
+    val followSystemTheme: Boolean = false,
 ) {
     val adbCommand
         get() = ToolResolver.adb(adb, File(tools))
@@ -142,6 +143,7 @@ data class Settings(
             ToolPolicy.ids.forEach { p.setProperty(setupKey + "version." + it, setup.version(it)) }
             mapOf(
                     "dark" to dark,
+                    "followSystemTheme" to followSystemTheme,
                     "autoRefresh" to autoRefresh,
                     "maxLogs" to maxLogs,
                     "maxRequests" to maxRequests,
@@ -178,6 +180,8 @@ data class Settings(
                 adb = s("tools.${platform.key}.adb", if (legacy) s("adb") else ""),
                 python = s("tools.${platform.key}.python", oldPython),
                 dark = s("dark", "true").toBoolean(),
+                followSystemTheme = p.getProperty("followSystemTheme")?.toBooleanStrictOrNull()
+                    ?: !p.containsKey("dark"),
                 autoRefresh = s("autoRefresh", "true").toBoolean(),
                 maxLogs = s("maxLogs").toIntOrNull()?.coerceIn(1000, 100000) ?: 20000,
                 maxRequests = s("maxRequests").toIntOrNull()?.coerceIn(100, 20000) ?: 10000,

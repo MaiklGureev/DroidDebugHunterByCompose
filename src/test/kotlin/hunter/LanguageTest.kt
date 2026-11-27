@@ -107,6 +107,18 @@ class LanguageTest {
     }
 
     @Test
+    fun `theme follows the system on first run and keeps a saved override`(@TempDir directory: Path) {
+        val file = directory.resolve("settings.properties").toFile()
+        assertTrue(Settings.load(file).followSystemTheme)
+        file.writeText("dark=false\n")
+        val legacy = Settings.load(file)
+        assertFalse(legacy.followSystemTheme)
+        assertFalse(legacy.dark)
+        legacy.copy(followSystemTheme = true).save(file)
+        assertTrue(Settings.load(file).followSystemTheme)
+    }
+
+    @Test
     fun `all help topics have resources for each interface language`() {
         val topics =
             listOf(

@@ -71,7 +71,7 @@ private fun launchHunter() = application {
         },
     ) {
         LaunchedEffect(Unit) { window.minimumSize = Dimension(1100, 720) }
-        HunterTheme(model.settings.dark) { HunterApp(model, closing) }
+        HunterTheme(model.settings.isDarkTheme()) { HunterApp(model, closing) }
     }
     model.outputs.toList().forEach { output ->
         key(output.id) {
@@ -86,7 +86,7 @@ private fun launchHunter() = application {
                     } else false
                 },
             ) {
-                HunterTheme(model.settings.dark) { OutputContent(model, output) }
+                HunterTheme(model.settings.isDarkTheme()) { OutputContent(model, output) }
             }
         }
     }
@@ -106,7 +106,7 @@ private fun launchHunter() = application {
                         } else false
                     },
                 ) {
-                    HunterTheme(model.settings.dark) { ExchangeContent(model, exchange) }
+                    HunterTheme(model.settings.isDarkTheme()) { ExchangeContent(model, exchange) }
                 }
         }
     }

@@ -9,6 +9,10 @@ import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
+import androidx.compose.material3.LocalContentColor as Material3ContentColor
+import androidx.compose.material3.MaterialTheme as Material3Theme
+import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -35,7 +39,10 @@ val Muted
     @Composable get() = MaterialTheme.colors.onSurface.copy(alpha = .56f)
 
 @Composable
-fun HunterTheme(dark: Boolean, content: @Composable () -> Unit) {
+fun Settings.isDarkTheme(): Boolean = if (followSystemTheme) isSystemInDarkTheme() else dark
+
+@Composable
+fun HunterTheme(dark: Boolean = isSystemInDarkTheme(), content: @Composable () -> Unit) {
     val colors =
         if (dark)
             darkColors(
@@ -69,8 +76,20 @@ fun HunterTheme(dark: Boolean, content: @Composable () -> Unit) {
                     ),
             ),
         shapes = Shapes(small = RoundedCornerShape(7.dp), medium = RoundedCornerShape(10.dp)),
-        content = content,
-    )
+    ) {
+        val scheme = (if (dark) darkColorScheme() else lightColorScheme()).copy(
+            primary = colors.primary,
+            onPrimary = if (dark) colors.background else colors.onPrimary,
+            background = colors.background,
+            onBackground = colors.onBackground,
+            surface = colors.surface,
+            onSurface = colors.onSurface,
+            error = colors.error,
+        )
+        Material3Theme(colorScheme = scheme) {
+            CompositionLocalProvider(Material3ContentColor provides scheme.onSurface, content = content)
+        }
+    }
 }
 
 @Composable

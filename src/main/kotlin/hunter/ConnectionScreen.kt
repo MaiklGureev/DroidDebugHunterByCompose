@@ -38,7 +38,7 @@ fun ConnectionScreen(model: AppState) {
     val connected = model.selectedDevice?.state == "device"
     val scroll = rememberScrollState()
     val scope = rememberCoroutineScope()
-    var expandedTools by remember { mutableStateOf("") }
+    var showToolSettings by remember { mutableStateOf(false) }
     val androidConnection = remember { BringIntoViewRequester() }
     val captureTools = remember { BringIntoViewRequester() }
     LaunchedEffect(model.initialized, model.settings.toolConfiguration(), model.busy.isEmpty()) {
@@ -89,13 +89,10 @@ fun ConnectionScreen(model: AppState) {
                 AndroidConnectionWizard(model, idle)
             }
             ConnectionToolsPanel(
-                model, tr("ADB software"), listOf("adb"), expandedTools == "adb",
-                onExpand = { expandedTools = if (expandedTools == "adb") "" else "adb" },
-            )
-            ConnectionToolsPanel(
-                model, tr("Capture software"), model.mode.toolComponents(model.settings.gadget),
-                expandedTools == "capture",
-                onExpand = { expandedTools = if (expandedTools == "capture") "" else "capture" },
+                model,
+                model.mode.toolComponents(model.settings.gadget),
+                showToolSettings,
+                onExpand = { showToolSettings = !showToolSettings },
                 modifier = Modifier.bringIntoViewRequester(captureTools),
             )
 
@@ -118,7 +115,7 @@ fun ConnectionScreen(model: AppState) {
                             scope.launch { androidConnection.bringIntoView(Rect(0f, 0f, 1f, 32f)) }
                         },
                         configureTools = {
-                            expandedTools = "capture"
+                            showToolSettings = true
                             scope.launch { captureTools.bringIntoView(Rect(0f, 0f, 1f, 32f)) }
                         },
                     )

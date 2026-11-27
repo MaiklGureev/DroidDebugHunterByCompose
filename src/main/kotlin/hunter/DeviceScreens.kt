@@ -414,8 +414,9 @@ fun ToolsScreen(model: AppState) {
 
 @Composable
 fun SettingsScreen(model: AppState) {
+    val dark = model.settings.isDarkTheme()
     var draft by
-        remember(model.settings.copy(language = UiLanguage.English, dark = false)) {
+        remember(model.settings.copy(language = UiLanguage.English, dark = false, followSystemTheme = false)) {
             mutableStateOf(model.settings)
         }
     val enabled = model.busy.isEmpty() && !model.capturing && !model.logging
@@ -440,7 +441,11 @@ fun SettingsScreen(model: AppState) {
             Check(tr("Automatically refresh devices every 5 seconds"), draft.autoRefresh, enabled) {
                 draft = draft.copy(autoRefresh = it)
             }
-            Check(tr("Dark theme"), model.settings.dark) {
+            ToolCheck(tr("Follow system theme"), model.settings.followSystemTheme) {
+                model.updateSettings(model.settings.copy(followSystemTheme = it, dark = dark))
+                draft = draft.copy(followSystemTheme = it, dark = dark)
+            }
+            ToolCheck(tr("Dark theme"), dark, !model.settings.followSystemTheme) {
                 model.updateSettings(model.settings.copy(dark = it))
                 draft = draft.copy(dark = it)
             }
@@ -475,7 +480,11 @@ fun SettingsScreen(model: AppState) {
                 fontSize = 11.sp,
             )
             Action(tr("Apply"), Icons.Outlined.Check, enabled) {
-                model.updateSettings(draft)
+                model.updateSettings(model.settings.copy(
+                    autoRefresh = draft.autoRefresh,
+                    maxLogs = draft.maxLogs,
+                    maxRequests = draft.maxRequests,
+                ))
                 model.status = tr("Settings applied")
             }
         }

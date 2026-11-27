@@ -40,6 +40,7 @@ fun Page.icon(): ImageVector =
 @Composable
 fun HunterApp(model: AppState, closing: Boolean) {
     var journalVisible by remember { mutableStateOf(false) }
+    val dark = model.settings.isDarkTheme()
     Surface(color = MaterialTheme.colors.background) {
         Column(
             Modifier.fillMaxSize()
@@ -129,12 +130,12 @@ fun HunterApp(model: AppState, closing: Boolean) {
                                 color = Muted,
                             )
                             MiniIcon(
-                                if (model.settings.dark) Icons.Outlined.LightMode
+                                if (dark) Icons.Outlined.LightMode
                                 else Icons.Outlined.DarkMode,
                                 tr("Switch theme"),
                             ) {
                                 model.updateSettings(
-                                    model.settings.copy(dark = !model.settings.dark)
+                                    model.settings.copy(dark = !dark, followSystemTheme = false)
                                 )
                             }
                         }

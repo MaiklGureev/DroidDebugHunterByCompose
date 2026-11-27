@@ -2,30 +2,28 @@
 
 package hunter
 
-import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.hoverable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.*
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.material3.*
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.*
+import androidx.compose.ui.input.pointer.PointerIcon
+import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import java.awt.Desktop
 import java.io.File
-import java.net.URI
 import javax.swing.JFileChooser
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 @Composable
 fun ToolSetupPanel(
@@ -34,438 +32,205 @@ fun ToolSetupPanel(
     change: (Settings) -> Unit,
     apply: () -> Unit,
     components: List<String>,
+    selected: List<String>,
     enabled: Boolean,
+    valid: Boolean,
 ) {
-    val adbOnly = components == listOf("adb")
-    var component by remember(components) { mutableStateOf(components.singleOrNull() ?: "") }
-    var editVersions by remember { mutableStateOf(false) }
-    var sourcesVisible by remember { mutableStateOf(false) }
     val options = draft.setup
-    val validVersions = ToolPolicy.ids.all { ToolPolicy.validVersion(options.version(it)) }
-    val selectedComponents = when {
-        options.mode == SetupMode.Automatic && !adbOnly -> listOf("adb") + components
-        options.mode == SetupMode.Automatic || component == "connection" -> components
-        component.isNotBlank() -> listOf(component)
-        else -> emptyList()
-    }
-    val hasComponent = options.chosen && selectedComponents.isNotEmpty()
-    val needsPython = selectedComponents.any { it != "adb" && it != "wireguard" }
-    val selectionReady =
-        hasComponent && (options.mode == SetupMode.Manual || !needsPython || options.methodChosen)
-    val choices = if (adbOnly) components else listOf("connection") + components +
-        if ("capture" in components) listOf("frida") else emptyList()
-    val versionIds = components.flatMap(::toolFindingIds)
-        .map { if (it == "server" || it == "gadget") "frida" else it }.distinct()
+    var showVersions by remember { mutableStateOf(false) }
     fun update(value: ToolSetupOptions) = change(draft.copy(setup = value))
-    val uiScope = rememberCoroutineScope()
-    fun selectFolder(current: String, selected: (String) -> Unit) {
-        val dialog =
-            JFileChooser(current).apply {
-                fileSelectionMode = JFileChooser.DIRECTORIES_ONLY
-                dialogTitle = tr("Select folder")
-            }
+    fun chooseDirectory(current: String, onSelected: (String) -> Unit) {
+        val dialog = JFileChooser(current).apply {
+            fileSelectionMode = JFileChooser.DIRECTORIES_ONLY
+            dialogTitle = tr("Select folder")
+        }
         if (dialog.showOpenDialog(null) == JFileChooser.APPROVE_OPTION)
-            selected(dialog.selectedFile.absolutePath)
+            onSelected(dialog.selectedFile.absolutePath)
     }
 
-    ToolPaths(model, draft, change, enabled, adbOnly, ::selectFolder)
-    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Action(tr("Save"), Icons.Outlined.Save, enabled && draft.tools.isNotBlank() && validVersions) {
-            apply()
-            model.status = tr("Settings saved")
-        }
-        Action(tr("Check"), Icons.Outlined.CheckCircleOutline, enabled && draft.tools.isNotBlank() && validVersions) {
-            apply()
-            model.checkTools(refreshAdb = adbOnly)
-        }
-    }
-    Divider(color = Line)
-    Text(tr("Tool setup"), fontWeight = FontWeight.SemiBold)
-    Text(
-        tr(
-            "Choose a setup approach, a component and a download method. Nothing is downloaded until you press a download or prepare button."
-        ),
-        color = Muted,
-    )
-    FlowRow(
-        Modifier.selectableGroup(),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    Column(
+        Modifier.onPreviewKeyEvent { event ->
+            if (enabled && valid && event.type == KeyEventType.KeyDown &&
+                event.isPlatformShortcutPressed && event.key == Key.S) {
+                apply()
+                true
+            } else false
+        },
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        for (mode in SetupMode.entries) SetupOptionCard(
-            tr(mode.key),
-            tr(
-                when (mode) {
-                    SetupMode.Manual ->
-                        "Manual: select installed tools, check versions and use the instructions. No automatic installation."
-                    SetupMode.Guided ->
-                        "Guided: choose one component and installation method, review the plan, then prepare it."
-                    SetupMode.Automatic ->
-                        "Automatic: prepare the tools for this connection and try alternative Python methods if needed."
-                }
-            ),
-            options.chosen && options.mode == mode,
-            enabled,
-        ) {
-            update(options.copy(mode = mode, chosen = true))
+        Text(tr("Local tool settings"), style = MaterialTheme.typography.titleSmall)
+        Text(tr("Platform: {0}", HostPlatform.current.label), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+        Text(tr("The local tool directory is shared across connection methods."), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+        ToolPathField(tr("Tool bundle directory"), draft.tools, { change(draft.copy(tools = it)) },
+            tr("Folder…"), enabled) {
+            chooseDirectory(draft.tools) { change(draft.copy(tools = it)) }
         }
-    }
+        ToolPathField(tr("ADB (empty = bundle / PATH)"), draft.adb, { change(draft.copy(adb = it)) },
+            tr("Select…"), enabled) {
+            chooseFile(title = HostPlatform.current.executable("adb"))?.let {
+                change(draft.copy(adb = it.absolutePath))
+            }
+        }
+        ToolPathField(tr("Python executable (empty = auto)"), draft.python, { change(draft.copy(python = it)) },
+            tr("Select…"), enabled) {
+            chooseFile(title = HostPlatform.current.executable(HostPlatform.current.pythonName))?.let {
+                change(draft.copy(python = it.absolutePath))
+            }
+        }
 
-    Text(tr("Target versions"), fontWeight = FontWeight.SemiBold)
-    Text(
-        versionIds.joinToString(" · ") { "${ToolPolicy.names[it]} ${ToolPolicy.target(it)}" },
-        fontSize = 12.sp,
-    )
-    Text(
-        tr(
-            if ("capture" in components)
-                "Other versions are allowed with warnings. Frida client, server and Gadget must use the same version. Package requirements and native wheel availability still apply."
-            else "Other versions are allowed with warnings."
-        ),
-        color = Muted,
-        fontSize = 12.sp,
-    )
-    Check(tr("Choose different versions"), editVersions, enabled) { editVersions = it }
-    if (editVersions) {
-        for (ids in versionIds.chunked(2)) Row(
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            for (id in ids) Column(Modifier.weight(1f)) {
-                Field(
-                    options.version(id),
-                    { update(options.copy(versions = options.versions + (id to it.trim()))) },
-                    ToolPolicy.names.getValue(id),
-                    Modifier.fillMaxWidth(),
-                    enabled,
-                )
-                Text(tr("Target: {0}", ToolPolicy.target(id)), color = Muted, fontSize = 11.sp)
-                if (!ToolPolicy.validVersion(options.version(id)))
-                    Text(tr("Enter a numeric version"), color = Red)
-                else if (options.version(id) != ToolPolicy.target(id))
-                    Text(
-                        ToolPolicy.notice(id, options.version(id)),
-                        color = Amber,
-                        fontSize = 11.sp,
-                    )
-            }
-            if (ids.size == 1) Spacer(Modifier.weight(1f))
+        Text(tr("Setup mode"), style = MaterialTheme.typography.titleSmall)
+        ToolChoices(SetupMode.entries, options.mode, { tr(it.key) }, enabled) {
+            update(options.copy(mode = it, chosen = true))
         }
-        Action(tr("Restore target versions"), enabled = enabled) {
-            update(options.copy(versions = options.versions + versionIds.associateWith(ToolPolicy::target)))
-        }
-    }
-
-    Text(tr("Components to download"), fontWeight = FontWeight.SemiBold)
-    if (options.chosen && options.mode == SetupMode.Automatic)
-        Text(selectedComponents.joinToString(" · ") { componentTitle(it) }, color = Accent)
-    else
-        FlowRow(
-            Modifier.selectableGroup(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            for (id in choices) Surface(
-                shape = MaterialTheme.shapes.small,
-                border =
-                    BorderStroke(
-                        if (component == id) 2.dp else 1.dp,
-                        if (component == id) Accent else Line,
-                    ),
-                color =
-                    if (component == id) Accent.copy(alpha = .10f) else MaterialTheme.colors.surface,
-            ) {
-                Row(
-                    Modifier.selectable(component == id, enabled, Role.RadioButton) {
-                            component = id
-                        }
-                        .padding(horizontal = 10.dp, vertical = 7.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    RadioButton(
-                        component == id,
-                        onClick = null,
-                        enabled = enabled,
-                        modifier = Modifier.size(22.dp),
-                    )
-                    Spacer(Modifier.width(6.dp))
-                    Text(componentTitle(id), fontSize = 12.sp)
-                }
+        if (options.mode != SetupMode.Manual) {
+            Text(tr("Python installation method"), style = MaterialTheme.typography.titleSmall)
+            ToolChoices(SetupMethod.entries, options.method, { tr(it.key) }, enabled) {
+                update(options.copy(method = it, methodChosen = true))
             }
         }
-    if (options.chosen && options.mode != SetupMode.Manual) {
-        if (hasComponent && needsPython) {
-            Text(tr("Python installation method"), fontWeight = FontWeight.SemiBold)
-            Text(
-                tr("Bootstrap helper target: uv {0}", ToolPolicy.target("uv")),
-                color = Muted,
-                fontSize = 11.sp,
-            )
-            FlowRow(
-                Modifier.selectableGroup(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                for (method in SetupMethod.entries) SetupOptionCard(
-                    tr(method.key),
-                    tr(
-                        when (method) {
-                            SetupMethod.Managed ->
-                                "Download portable uv and create a private Python here. No installed Python is required."
-                            SetupMethod.Venv ->
-                                "Use the selected Python to create a local virtual environment. Requires venv and pip."
-                            SetupMethod.Target ->
-                                "Use the selected Python and install packages into the component folders with pip --target."
-                        }
-                    ),
-                    options.methodChosen && options.method == method,
-                    enabled,
-                ) {
-                    update(options.copy(method = method, methodChosen = true))
-                }
-            }
-        }
-        Check(tr("Offline: use local files and cache only"), options.offline, enabled) {
+        ToolCheck(tr("Offline: use local files and cache only"), options.offline, enabled) {
             update(options.copy(offline = it))
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Field(
-                options.cache,
-                { update(options.copy(cache = it)) },
-                tr("Download cache (empty = tools/downloads)"),
-                Modifier.weight(1f),
-                enabled,
-            )
-            Action(tr("Folder…"), enabled = enabled) {
-                selectFolder(options.cache) { update(options.copy(cache = it)) }
+        ToolPathField(tr("Download cache (empty = tools/downloads)"), options.cache,
+            { update(options.copy(cache = it)) }, tr("Folder…"), enabled) {
+            chooseDirectory(options.cache) { update(options.copy(cache = it)) }
+        }
+        ToolPathField(tr("Local Platform Tools ZIP (optional)"), options.adbArchive,
+            { update(options.copy(adbArchive = it)) }, tr("Select…"), enabled) {
+            chooseFile(title = tr("Platform Tools ZIP"))?.let {
+                update(options.copy(adbArchive = it.absolutePath))
             }
         }
-        if (adbOnly) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Field(
-                options.adbArchive,
-                { update(options.copy(adbArchive = it)) },
-                tr("Local Platform Tools ZIP (optional)"),
-                Modifier.weight(1f),
-                enabled,
-            )
-            Action(tr("Select…"), enabled = enabled) {
-                chooseFile(title = tr("Platform Tools ZIP"))?.let {
-                    update(options.copy(adbArchive = it.absolutePath))
-                }
-            }
-        }
-        if (!adbOnly) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Field(
-                options.uv,
-                { update(options.copy(uv = it)) },
-                tr("Existing uv executable (optional)"),
-                Modifier.weight(1f),
-                enabled,
-            )
-            Action(tr("Select…"), enabled = enabled) {
+        if (options.mode != SetupMode.Manual && options.method == SetupMethod.Managed) {
+            ToolPathField(tr("Existing uv executable (optional)"), options.uv,
+                { update(options.copy(uv = it)) }, tr("Select…"), enabled) {
                 chooseFile(title = "uv")?.let { update(options.copy(uv = it.absolutePath)) }
             }
         }
-    }
-    FlowRow(
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        Action(
-            tr("Download links / folders"),
-            Icons.Outlined.Link,
-            enabled && hasComponent && validVersions,
-        ) {
-            sourcesVisible = true
-        }
-        Action(tr("Check / create folders"), Icons.Outlined.CreateNewFolder,
-            enabled && draft.tools.isNotBlank() && validVersions) {
-            apply()
-            model.initializeToolFolders()
-        }
-        Action(tr("Folder structure"), Icons.Outlined.AccountTree, enabled) {
-            model.outputs +=
-                OutputWindow(title = tr("Folder structure"), text = ToolLayout.structure(draft))
-        }
-    }
-    if (sourcesVisible)
-        ToolSourcesDialog(
-            model,
-            draft,
-            selectedComponents,
-        ) {
-            sourcesVisible = false
-        }
-    if (model.toolDirectoryWarnings.isNotEmpty())
-        Text(model.toolDirectoryWarnings.joinToString("\n"), color = Amber, fontSize = 11.sp)
-    Text(
-        tr(
-            "All methods use user-writable folders. No administrator prompt or system package installation is triggered. If policy blocks a method, try another method, local archives or existing tools."
-        ),
-        color = Muted,
-        fontSize = 12.sp,
-    )
-    FlowRow(
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        Action(
-            tr("Plan / manual instructions"),
-            Icons.Outlined.Description,
-            enabled && selectionReady,
-        ) {
-            model.outputs +=
-                OutputWindow(
-                    title = tr("Setup plan"),
-                    text = ToolProvisioner.plan(draft, selectedComponents),
-                )
-        }
-        if (options.chosen && options.mode != SetupMode.Manual)
-            Action(
-                tr("Prepare selected tools"),
-                Icons.Outlined.Download,
-                enabled && selectionReady && draft.tools.isNotBlank() && validVersions,
-                primary = true,
-            ) {
-                apply()
-                model.setupTools(selectedComponents)
-            }
-        Action(tr("Use app data folder"), enabled = enabled) {
-            change(
-                draft.copy(
-                    tools = File(AppFiles.data, "tools/${HostPlatform.current.key}").absolutePath
-                )
-            )
-        }
-    }
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        for ((label, url) in
-            listOf(
-                "Python" to "https://www.python.org/downloads/",
-                "ADB" to "https://developer.android.com/tools/releases/platform-tools",
-                "Frida" to "https://github.com/frida/frida/releases",
-                "uv" to "https://docs.astral.sh/uv/getting-started/installation/",
-            ).filter { (label, _) ->
-                when (label) {
-                    "ADB" -> adbOnly
-                    "Frida" -> "capture" in components
-                    else -> !adbOnly
-                }
-            }) {
-            Action(label, Icons.AutoMirrored.Outlined.OpenInNew) {
-                uiScope.launch {
-                    try {
-                        withContext(Dispatchers.IO) { Desktop.getDesktop().browse(URI(url)) }
-                    } catch (e: Exception) {
-                        model.error = e.message.orEmpty()
+
+        ToolCheck(tr("Choose different versions"), showVersions) { showVersions = it }
+        if (showVersions) {
+            val ids = components.flatMap(::toolFindingIds)
+                .map { if (it == "server" || it == "gadget") "frida" else it }.distinct()
+            for (group in ids.chunked(2)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    for (id in group) {
+                        Column(Modifier.weight(1f)) {
+                            OutlinedTextField(
+                                options.version(id),
+                                { update(options.copy(versions = options.versions + (id to it.trim()))) },
+                                modifier = Modifier.fillMaxWidth(),
+                                label = { Text(ToolPolicy.names.getValue(id)) },
+                                enabled = enabled,
+                                singleLine = true,
+                                isError = !ToolPolicy.validVersion(options.version(id)),
+                            )
+                            Text(tr("Target: {0}", ToolPolicy.target(id)), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelSmall)
+                            if (!ToolPolicy.validVersion(options.version(id))) {
+                                Text(tr("Enter a numeric version"), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelSmall)
+                            }
+                        }
                     }
+                    if (group.size == 1) Spacer(Modifier.weight(1f))
                 }
             }
+            ToolAction(tr("Restore target versions"), enabled = enabled) {
+                update(options.copy(versions = options.versions + ids.associateWith(ToolPolicy::target)))
+            }
         }
-    }
-    model.setupProgress?.let { progress ->
-        Text(progress.phase, color = Accent, fontWeight = FontWeight.SemiBold)
-        if (progress.fraction != null) {
-            LinearProgressIndicator(
-                progress = progress.fraction!!,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            Text(
-                "${(progress.fraction!! * 100).toInt()}% · ${progress.bytes / 1024} / ${(progress.total ?: 0) / 1024} KiB",
-                color = Muted,
-            )
-        } else {
-            LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-            if (progress.bytes > 0) Text("${progress.bytes / 1024} KiB", color = Muted)
+
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            ToolAction(tr("Save"), Icons.Outlined.Save, enabled && valid, onClick = apply)
+            ToolAction(tr("Use app data folder"), enabled = enabled) {
+                change(draft.copy(tools = File(AppFiles.data, "tools/${HostPlatform.current.key}").absolutePath))
+            }
+            ToolAction(tr("Check / create folders"), Icons.Outlined.CreateNewFolder, enabled && valid) {
+                apply()
+                model.initializeToolFolders()
+            }
+            ToolAction(tr("Folder structure"), Icons.Outlined.AccountTree, valid) {
+                model.outputs += OutputWindow(title = tr("Folder structure"), text = ToolLayout.structure(draft))
+            }
+            ToolAction(tr("Plan / manual instructions"), Icons.Outlined.Description, valid && selected.isNotEmpty()) {
+                model.outputs += OutputWindow(title = tr("Setup plan"), text = ToolProvisioner.plan(draft, selected))
+            }
         }
-        Text(progress.detail, fontSize = 12.sp)
-        Action(tr("Cancel"), Icons.Outlined.Close) { model.cancelOperation() }
-    }
-    if (model.setupLiveLog.isNotBlank()) {
-        Text(tr("Setup log"), fontWeight = FontWeight.SemiBold)
-        val scroll = rememberScrollState()
-        LaunchedEffect(model.setupLiveLog) { scroll.scrollTo(scroll.maxValue) }
-        Surface(
-            color = MaterialTheme.colors.background,
-            modifier = Modifier.fillMaxWidth().heightIn(max = 180.dp),
-        ) {
-            Text(
-                model.setupLiveLog,
-                Modifier.padding(10.dp).verticalScroll(scroll),
-                fontSize = 11.sp,
-                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
-            )
+        if (model.toolDirectoryWarnings.isNotEmpty()) {
+            Text(model.toolDirectoryWarnings.joinToString("\n"), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelSmall)
         }
     }
 }
 
 @Composable
-private fun ToolPaths(
-    model: AppState,
-    draft: Settings,
-    change: (Settings) -> Unit,
+private fun ToolPathField(
+    label: String,
+    value: String,
+    onValueChange: (String) -> Unit,
+    action: String,
     enabled: Boolean,
-    adbOnly: Boolean,
-    selectFolder: (String, (String) -> Unit) -> Unit,
+    onChoose: () -> Unit,
 ) {
-    Text(tr("Platform: {0}", HostPlatform.current.label), color = Accent)
-    Text(tr("The local tool directory is shared across connection methods."), color = Muted, fontSize = 12.sp)
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Field(draft.tools, { change(draft.copy(tools = it)) }, tr("Tool bundle directory"),
-            Modifier.weight(1f), enabled)
-        Action(tr("Folder…"), enabled = enabled) {
-            selectFolder(draft.tools) { change(draft.copy(tools = it)) }
-        }
-        MiniIcon(Icons.Outlined.FolderOpen, tr("Open directory"), File(draft.tools).isDirectory) {
-            openFile(model, File(draft.tools))
-        }
-    }
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Field(
-            if (adbOnly) draft.adb else draft.python,
-            { change(if (adbOnly) draft.copy(adb = it) else draft.copy(python = it)) },
-            tr(if (adbOnly) "ADB (empty = bundle / PATH)" else "Python executable (empty = auto)"),
-            Modifier.weight(1f),
-            enabled,
+        OutlinedTextField(
+            value, onValueChange,
+            modifier = Modifier.weight(1f),
+            label = { Text(label) },
+            enabled = enabled,
+            singleLine = true,
         )
-        Action(tr("Select…"), enabled = enabled) {
-            val name = if (adbOnly) "adb" else HostPlatform.current.pythonName
-            chooseFile(title = HostPlatform.current.executable(name))?.let {
-                change(if (adbOnly) draft.copy(adb = it.absolutePath) else draft.copy(python = it.absolutePath))
+        ToolAction(action, enabled = enabled, onClick = onChoose)
+    }
+}
+
+@Composable
+private fun <T> ToolChoices(
+    entries: List<T>,
+    selected: T,
+    label: (T) -> String,
+    enabled: Boolean,
+    onSelect: (T) -> Unit,
+) {
+    FlowRow(Modifier.selectableGroup(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        for (entry in entries) {
+            val interaction = remember { MutableInteractionSource() }
+            val hovered by interaction.collectIsHoveredAsState()
+            Row(
+                Modifier.heightIn(min = 40.dp)
+                    .background(
+                        if (hovered) MaterialTheme.colorScheme.surfaceVariant else Color.Transparent,
+                        MaterialTheme.shapes.small,
+                    )
+                    .hoverable(interaction, enabled)
+                    .pointerHoverIcon(if (enabled) PointerIcon.Hand else PointerIcon.Default)
+                    .selectable(entry == selected, enabled, Role.RadioButton) { onSelect(entry) }
+                    .padding(horizontal = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                RadioButton(entry == selected, onClick = null, enabled = enabled)
+                Text(label(entry), style = MaterialTheme.typography.bodySmall)
             }
         }
     }
 }
 
 @Composable
-private fun SetupOptionCard(
-    title: String,
-    detail: String,
-    selected: Boolean,
-    enabled: Boolean,
-    click: () -> Unit,
-) {
-    Surface(
-        shape = MaterialTheme.shapes.small,
-        border = BorderStroke(if (selected) 2.dp else 1.dp, if (selected) Accent else Line),
-        color = if (selected) Accent.copy(alpha = .10f) else MaterialTheme.colors.surface,
-        modifier = Modifier.width(330.dp),
-    ) {
-        Row(
-            Modifier.selectable(selected, enabled, Role.RadioButton, onClick = click)
-                .padding(12.dp),
-            verticalAlignment = Alignment.Top,
-        ) {
-            RadioButton(
-                selected,
-                onClick = null,
-                enabled = enabled,
-                modifier = Modifier.size(24.dp),
+fun ToolCheck(text: String, checked: Boolean, enabled: Boolean = true, onChange: (Boolean) -> Unit) {
+    val interaction = remember { MutableInteractionSource() }
+    val hovered by interaction.collectIsHoveredAsState()
+    Row(
+        Modifier.heightIn(min = 40.dp)
+            .background(
+                if (hovered) MaterialTheme.colorScheme.surfaceVariant else Color.Transparent,
+                MaterialTheme.shapes.small,
             )
-            Spacer(Modifier.width(10.dp))
-            Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                Text(title, fontWeight = FontWeight.SemiBold)
-                Text(detail, color = Muted, fontSize = 12.sp)
-            }
-        }
+            .hoverable(interaction, enabled)
+            .pointerHoverIcon(if (enabled) PointerIcon.Hand else PointerIcon.Default)
+            .toggleable(checked, enabled, Role.Checkbox, onValueChange = onChange),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Checkbox(checked, onCheckedChange = null, enabled = enabled)
+        Text(text, style = MaterialTheme.typography.bodySmall)
     }
 }

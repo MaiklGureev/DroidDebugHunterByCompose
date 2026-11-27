@@ -2,7 +2,7 @@
 
 **English** | [Русский](DOWNLOADS.md)
 
-HAR analysis needs no external tools. Java is included in native packages. ADB is needed for devices; Python and mode-specific packages are needed for capture. Setup starts only when you click **Prepare selected tools**. Normal startup downloads nothing.
+HAR analysis needs no external tools. Java is included in native packages. ADB is needed for devices; Python and mode-specific packages are needed for capture. Check the tools you want and click **Prepare selected**. Normal startup downloads nothing.
 
 ## Target versions and alternatives
 
@@ -23,13 +23,13 @@ The reference configuration is recorded in `tool-setup/tool-versions.json` (revi
 
 ## Three setup modes
 
-On **Connection**, open **Configure tools** in **ADB software** or **Capture software**. ADB is shared by USB, Wi-Fi and Emulator. The capture block shows the components for the current mode and displays detected and target versions. Choose an approach, component and Python method when needed. Downloads start when you press the preparation button.
+On **Connection**, the tool list groups ADB and the components for the current capture method. Each row shows its status and detected/selected versions. **Files** opens the download links and folders for that component. Open **Tool settings** to change paths, versions, the setup mode or the Python method.
 
 - **Manual:** select ADB/Python executables or PATH commands, use an existing venv or unpack official archives yourself. Check versions and open **Plan / manual instructions** for commands and package-manager alternatives. This mode installs nothing.
-- **Guided:** select a component, method and versions; inspect the plan, then prepare it. ADB can be downloaded/unpacked independently of Python.
-- **Automatic:** from ADB software, prepare only ADB. From Capture software, prepare ADB and the components for the current capture mode. If Python preparation fails, try the other local methods. If the selected tools folder is read-only, try the app's user data folder.
+- **Guided:** prepare the checked components with the selected method and versions. ADB can be downloaded and unpacked independently of Python.
+- **Automatic:** prepare the checked components and try alternative Python methods if needed. If the tools directory is read-only, try the app's user data folder. **Select required** checks ADB and the tools for the current capture method.
 
-During a batch, a failed download leaves that component unfinished. Independent steps continue, including the standalone WireGuard APK if Python is unavailable. Steps that require a missing prerequisite are marked **Skipped**. An invalid download is rejected. Use **Retry unfinished components** or **Download links / folders** to recover, then **Check tools** after placing files manually.
+During a batch, a failed download leaves that component unfinished. Independent steps continue, including the standalone WireGuard APK if Python is unavailable. Steps that require a missing prerequisite are marked **Skipped**. To retry, click **Select unfinished**, then **Prepare selected**. For manual recovery, use **Files** in the affected row, then **Check tools** after placing the files.
 
 Modes, methods, selected versions, offline/cache settings and executable paths are saved per OS/CPU profile.
 
@@ -70,7 +70,7 @@ Use the chosen versions in filenames. Offline mode makes no download attempts. P
 
 ## Separate downloads and manual folder layout
 
-Choose **Frida bundle: client + server + Gadget** to prepare all Frida components together, or choose an individual component. **Download links / folders** lists versioned URLs, per-file **Download file**, **Copy link**, **Open link** and **Open destination folder** actions. **Download file** only saves the original archive/APK in the cache; it does not install or extract it. Python package links open their version's files page so you can select host-compatible wheels and dependencies. **Copy all links** includes placement instructions. The dialog also opens the cache folder and shows the last downloaded file.
+Check the Frida client, server and Gadget together for the full bundle, or choose individual components. **Files** opens versioned URLs with **Download file**, **Copy link**, **Open link** and **Open destination folder** actions. **Download file** saves the original archive or APK in the cache. Python package links open the files page for the selected version so you can choose compatible wheels and dependencies. **Copy all links** includes placement instructions.
 
 At startup the app tries to create missing component/cache directories. A read-only folder produces warnings without preventing startup or requesting elevation. **Check / create folders** retries after you choose another location. **Folder structure** shows your actual selected root and versions; you may create the same layout manually:
 
