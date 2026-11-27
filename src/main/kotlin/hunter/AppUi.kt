@@ -543,6 +543,8 @@ fun TrafficScreen(model: AppState) {
         }
     val selected = snapshot.firstOrNull { it.id == selectedId }
     val enabled = model.busy.isEmpty() && model.initialized
+    val fridaSetupNeeded = !model.capturing && model.mode.isFrida &&
+        model.fridaDiagnosis(forCapture = true)?.next != FridaNext.Ready
     fun openDetails(e: Exchange) {
         if (e.id !in model.detailIds) model.detailIds += e.id
     }
@@ -571,13 +573,22 @@ fun TrafficScreen(model: AppState) {
                     )
                     AppPicker(model, Modifier.weight(1f), enabled && !model.capturing)
                     Action(
-                        if (model.capturing) tr("Stop") else tr("Start capture"),
+                        when {
+                            model.capturing -> tr("Stop")
+                            fridaSetupNeeded -> tr("Check readiness")
+                            else -> tr("Start capture")
+                        },
                         if (model.capturing) Icons.Outlined.Stop else Icons.Outlined.PlayArrow,
-                        enabled && (model.capturing || model.selectedDevice?.state == "device"),
+                        enabled && (model.capturing || fridaSetupNeeded ||
+                            model.selectedDevice?.state == "device"),
                         primary = true,
                         danger = model.capturing,
-                        onClick = model::toggleCapture,
-                    )
+                    ) {
+                        if (fridaSetupNeeded) {
+                            setup = true
+                            model.checkFrida(forCapture = true)
+                        } else model.toggleCapture()
+                    }
                     MiniIcon(Icons.Outlined.Tune, tr("Configure capture")) { setup = true }
                 }
                 Text(model.mode.hint, color = Muted, fontSize = 11.sp)
@@ -801,6 +812,8 @@ private fun TableCell(text: String, width: Int) {
 @Composable
 fun CaptureSetup(model: AppState, dismiss: () -> Unit) {
     val enabled = model.busy.isEmpty() && !model.capturing
+    val frida = model.mode.isFrida
+    val fridaReady = model.fridaDiagnosis(forCapture = true)?.next == FridaNext.Ready
     AlertDialog(
         onDismissRequest = dismiss,
         title = { Text(tr("Capture setup")) },
@@ -826,7 +839,7 @@ fun CaptureSetup(model: AppState, dismiss: () -> Unit) {
                 )
                 Text(model.mode.hint, color = Muted)
                 Divider(color = Line)
-                if (model.mode == CaptureMode.OkHttp || model.mode == CaptureMode.Native) {
+                if (frida) {
                     Text("2. Frida", fontWeight = FontWeight.SemiBold)
                     Check(
                         tr("Rootless: debuggable + run-as + Gadget"),
@@ -838,18 +851,7 @@ fun CaptureSetup(model: AppState, dismiss: () -> Unit) {
                     Check(tr("Launch app at startup"), model.settings.spawn, enabled) {
                         model.updateSettings(model.settings.copy(spawn = it))
                     }
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Action(tr("Install server"), enabled = enabled) { model.installFrida() }
-                        Action(tr("Start server"), enabled = enabled, onClick = model::startFrida)
-                    }
-                    Text(
-                        tr(
-                            "Frida client/server/Gadget: {0}. The server requires root. Gadget only works with debuggable apps.",
-                            Adb.FRIDA_VERSION,
-                        ),
-                        color = Muted,
-                        fontSize = 11.sp,
-                    )
+                    FridaConnectionPanel(model, forCapture = true, enabled = enabled, dismiss = dismiss)
                 } else {
                     Text(tr("2. HTTPS / certificate"), fontWeight = FontWeight.SemiBold)
                     Text(
@@ -905,42 +907,19 @@ fun CaptureSetup(model: AppState, dismiss: () -> Unit) {
                 }
                 Divider(color = Line)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Action(
-                        tr("Check readiness"),
-                        enabled = model.busy.isEmpty(),
-                        onClick = model::checkCapture,
-                    )
+                    if (!frida) {
+                        Action(
+                            tr("Check readiness"),
+                            enabled = model.busy.isEmpty(),
+                            onClick = model::checkCapture,
+                        )
+                    }
                     Action(tr("User guide")) {
                         model.page = Page.Help
                         dismiss()
                     }
                 }
-                model.modeChecks.forEach { check ->
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.Top,
-                    ) {
-                        Icon(
-                            when (check.ready) {
-                                true -> Icons.Outlined.CheckCircleOutline
-                                false -> Icons.Outlined.ErrorOutline
-                                else -> Icons.Outlined.Info
-                            },
-                            null,
-                            Modifier.size(17.dp),
-                            tint =
-                                when (check.ready) {
-                                    true -> Green
-                                    false -> Red
-                                    else -> Amber
-                                },
-                        )
-                        Column {
-                            Text(check.title, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                            Text(check.detail, color = Muted, fontSize = 11.sp)
-                        }
-                    }
-                }
+                if (!frida) model.modeChecks.forEach { CheckResult(it) }
                 if (model.error.isNotEmpty()) Text(model.error, color = MaterialTheme.colors.error)
                 if (model.busy.isNotEmpty()) LinearProgressIndicator(Modifier.fillMaxWidth())
             }
@@ -953,7 +932,8 @@ fun CaptureSetup(model: AppState, dismiss: () -> Unit) {
                 },
                 enabled =
                     model.busy.isEmpty() &&
-                        (model.capturing || model.selectedDevice?.state == "device"),
+                        (model.capturing ||
+                            (model.selectedDevice?.state == "device" && (!frida || fridaReady))),
             ) {
                 Text(if (model.capturing) tr("Stop") else tr("Start capture"))
             }

@@ -29,6 +29,9 @@ enum class CaptureMode(private val titleKey: String, private val hintKey: String
     val title
         get() = tr(titleKey)
 
+    val isFrida
+        get() = this == OkHttp || this == Native
+
     val hint
         get() = tr(hintKey)
 }
@@ -151,7 +154,7 @@ class CaptureSession(
     private var process: StreamingProcess? = null
     private var reader: Job? = null
     private var proxy: ProxyLease? = null
-    private var forward: String? = null
+    private var forward: FridaForward? = null
     private var dataLock: CaptureLock? = null
     @Volatile private var stopping = false
     private val ready = CompletableDeferred<Unit>()
@@ -215,30 +218,17 @@ class CaptureSession(
                 val connection: List<String>
                 if (settings.gadget) {
                     require(settings.spawn) { tr("Enable app launch for Gadget") }
-                    check(
-                        adb.shell(serial, "run-as ${Adb.quote(app!!.packageName)} id")
-                            .contains("uid=")
-                    ) {
-                        tr("Gadget requires working run-as / debuggable")
-                    }
+                    adb.requireGadgetAccess(serial, app!!)
                     val arch = adb.architecture(serial, app)
                     gadget =
                         File(settings.tools, "frida-gadget/frida-gadget-$version-android-$arch.so")
                     withContext(Dispatchers.IO) { Adb.validateElf(gadget, arch) }
                     connection = listOf("--device", serial, "--gadget", gadget.absolutePath)
                 } else {
-                    val allocated =
-                        withContext(NonCancellable) {
-                            adb.device(serial, "forward", "tcp:0", "tcp:27042", timeout = 5000)
-                                .requireSuccess()
-                                .toIntOrNull()
-                        }
-                    check(allocated != null && allocated in 1..65535) {
-                        tr("ADB forward did not return a port")
-                    }
-                    forward = "tcp:$allocated"
+                    val opened = FridaForward.open(adb, serial)
+                    forward = opened
                     currentCoroutineContext().ensureActive()
-                    connection = listOf("--host", "127.0.0.1:$allocated")
+                    connection = listOf("--host", opened.address)
                 }
                 if (mode == CaptureMode.Native)
                     listOf(
@@ -258,7 +248,7 @@ class CaptureSession(
                         "frida_tools.repl",
                         if (settings.gadget) "-D" else "-H",
                         if (settings.gadget) serial
-                        else "127.0.0.1:${forward!!.substringAfter(':')}",
+                        else checkNotNull(forward).address,
                         if (settings.spawn) "-f" else "-N",
                         app!!.packageName,
                         "-l",
@@ -373,17 +363,7 @@ class CaptureSession(
                     )
                     log(tr("Check that the WireGuard tunnel is disabled on Android"))
                 }
-            forward?.let { owned ->
-                cleanup("ADB forward") {
-                    val lines = adb.run("forward", "--list").requireSuccess()
-                    if (
-                        lines.lineSequence().any {
-                            it.trim().split(Regex("\\s+")) == listOf(serial, owned, "tcp:27042")
-                        }
-                    )
-                        adb.device(serial, "forward", "--remove", owned).requireSuccess()
-                }
-            }
+            cleanup("ADB forward") { forward?.close() }
             forward = null
             dataLock?.close()
             dataLock = null

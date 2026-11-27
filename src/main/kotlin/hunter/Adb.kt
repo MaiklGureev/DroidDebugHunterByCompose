@@ -60,20 +60,25 @@ class Adb(private val settings: Settings) {
     suspend fun devices() = parseDevices(run("devices", "-l").requireSuccess())
 
     suspend fun connect(address: String, code: String = ""): String {
-        require(
-            address.matches(Regex("(?:[A-Za-z0-9][A-Za-z0-9.:-]*|\\[[a-fA-F0-9:]+]):[0-9]{1,5}"))
-        ) {
-            tr("Enter IP:port")
-        }
+        require(validAddress(address)) { tr("Enter IP:port") }
         if (code.isNotBlank())
             require(code.matches(Regex("[0-9]{6}"))) {
                 tr("The pairing code must contain 6 digits")
             }
         val result = if (code.isBlank()) run("connect", address) else run("pair", address, code)
-        val output = result.requireSuccess()
-        check(!Regex("(?i)failed|cannot|unable|error").containsMatchIn(output)) { output }
+        val output = if (code.isBlank()) result.requireSuccess() else result.output.trim()
+        val success =
+            if (code.isBlank()) Regex("(?im)^(?:already )?connected to ")
+            else Regex("(?im)^successfully paired to ")
+        check(result.code == 0 && success.containsMatchIn(output)) {
+            if (code.isBlank()) result.text.ifBlank { tr("Could not connect over Wi-Fi") }
+            else tr("Pairing failed. Open a new pairing code on Android and try again.")
+        }
         return output
     }
+
+    suspend fun discoverWireless() =
+        parseWirelessServices(run("mdns", "services", timeout = 5000).requireSuccess())
 
     suspend fun applications(serial: String, onWarning: (String) -> Unit = {}): List<AndroidApp> =
         coroutineScope {
@@ -317,9 +322,33 @@ class Adb(private val settings: Settings) {
         return arch(abi ?: shell(serial, "getprop ro.product.cpu.abi"))
     }
 
+    suspend fun requireGadgetAccess(serial: String, app: AndroidApp) {
+        val user = if (app.user == 0) "" else " --user ${app.user}"
+        val result =
+            device(serial, "shell", "run-as ${quote(app.packageName)}$user id", timeout = 5000)
+        val uid = Regex("(?m)^uid=(\\d+)").find(result.output)?.groupValues?.get(1)?.toIntOrNull()
+        check(result.code == 0 && uid != null && (app.uid == null || uid == app.uid)) {
+            tr("Gadget requires working run-as / debuggable") + "\n" + result.text
+        }
+    }
+
     companion object {
         val FRIDA_VERSION
             get() = ToolPolicy.target("frida")
+
+        fun validAddress(address: String): Boolean =
+            address.matches(Regex("(?:[A-Za-z0-9][A-Za-z0-9.-]*|\\[[a-fA-F0-9:]+]):[0-9]{1,5}")) &&
+                address.substringAfterLast(':').toIntOrNull()?.let { it in 1..65535 } == true
+
+        fun parseWirelessServices(output: String): List<String> =
+            output.lineSequence()
+                .map { it.trim().split(Regex("\\s+")) }
+                .filter { it.size == 3 && it[1].trimEnd('.') == "_adb-tls-connect._tcp" }
+                .map { it[2] }
+                .filter(::validAddress)
+                .distinct()
+                .sorted()
+                .toList()
 
         fun quote(value: String) = "'${value.replace("'", "'\\''")}'"
 

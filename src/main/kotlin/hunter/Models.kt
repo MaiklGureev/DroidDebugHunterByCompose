@@ -24,7 +24,21 @@ fun JsonObject.flag(key: String, default: Boolean = false) =
 
 fun parseObject(value: String): JsonObject = JsonParser.parseString(value).asJsonObject
 
+enum class AndroidConnection(val title: String) {
+    Usb("USB"), Wifi("Wi-Fi"), Emulator("Emulator");
+
+    companion object {
+        fun forSerial(serial: String) = when {
+            serial.startsWith("emulator-") -> Emulator
+            ':' in serial || serial.contains("._adb-tls-connect._tcp") -> Wifi
+            else -> Usb
+        }
+    }
+}
+
 data class Device(val serial: String, val state: String, val model: String = "") {
+    val connection get() = AndroidConnection.forSerial(serial)
+
     val label
         get() = "${model.ifBlank { serial }} · $serial · $state"
 }

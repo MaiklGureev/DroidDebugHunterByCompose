@@ -12,9 +12,13 @@ Windows, macOS and Linux need their own ADB/Python/wheels. Android server/Gadget
 
 ## 2. Connect Android
 
+Open **Devices → Connect Android** and choose **USB**, **Wi-Fi**, or **Emulator**.
+
 Enable Developer options and USB debugging. Connect a data-capable cable, unlock the phone and confirm the computer's RSA key. Refresh devices and select a row in `device` state. For `unauthorized`, confirm the phone prompt; for `offline`, check cable/debugging and reconnect. Linux may need distribution udev configuration; Windows may need the manufacturer's USB driver.
 
-Android 11+: enable Wireless debugging. Pair using the pairing screen's address/port and six-digit code in Devices (`Устройства`), then connect to the debugging address/port shown on the main Wireless debugging screen. These ports are usually different. Phone and computer need network reachability.
+Android 11+: enable wireless debugging. On the **Wi-Fi** card, enter the pairing address and six-digit code in step 1. In step 2, use the connection address from the main Wireless debugging screen or choose an address found by ADB discovery. If the computer is already paired, start at step 2.
+
+For an Android Studio emulator, start the virtual device in Device Manager, wait for Android to boot, and refresh from the **Emulator** card. Use **Wi-Fi** for emulators that provide an ADB network address.
 
 Refresh Apps (`Приложения`) and select the current Android profile's package. Refresh again after switching profiles. UID is not PID; App ID = UID % 100000. See [ADB operations](ADB_TOOLS.en.md).
 
@@ -32,7 +36,7 @@ If HTTP works but HTTPS fails, check CA trust and your debug APK's pinning. If n
 
 ### Frida · OkHttp with root
 
-Prepare Python Frida and an extracted Android frida-server for the correct ABI. Install/start the server from capture settings or Devices, confirming root access on Android. `adb root` works only on compatible emulators/debug firmware. The server listens on Android `127.0.0.1:27042`.
+Open **Check Frida connection** in capture settings or Devices. The checklist shows the active Python Frida version, device ABI, installed server version when available, and the result of a real Frida request through a temporary ADB forward. An independently started server can respond without exposing its exact version. Follow the proposed action to prepare tools, install or start the matching server, or choose an app. Confirm root access on Android when starting the server. `adb root` works on supported emulators/debug firmware. The server listens on Android `127.0.0.1:27042`.
 
 Select a package, OkHttp mode and optionally Launch app at startup (`Запустить приложение при старте`). Disable the Gadget option when using the root-server scenario. Start capture and repeat the network action from process startup. Disable launch-at-start to attach to a running app.
 
@@ -49,6 +53,8 @@ Hidden/static TLS functions, other processes and HTTP/3 may be unavailable. Unre
 Use a **debuggable APK** with working `run-as` and JDWP. Prepare Gadget matching the active Frida client (target 17.26.2) for the app ABI; a 32-bit app on a 64-bit device may need a different ABI.
 
 Enable Rootless: debuggable + run-as + Gadget (`Без root: debuggable + run-as + Gadget`) and app launch at startup. Frida uses ADB/JDWP and the local Gadget. Arbitrary inaccessible running processes cannot be attached this way without root. Check your APK's debuggable flag and `run-as` if startup is rejected.
+
+The checklist verifies `run-as` and the local Gadget ELF for the selected app ABI and client version. Gadget connects when capture launches the app.
 
 ### VPN · WireGuard
 

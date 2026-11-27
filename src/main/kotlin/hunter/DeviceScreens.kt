@@ -22,35 +22,22 @@ import kotlinx.coroutines.withContext
 
 @Composable
 fun DevicesScreen(model: AppState) {
-    var connection by remember { mutableStateOf(false) }
+    var captureSetup by remember { mutableStateOf(false) }
     val enabled = model.busy.isEmpty()
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Action(tr("Connect over network"), Icons.Outlined.Add, enabled, primary = true) {
-                connection = true
-            }
-            Action(tr("Refresh"), Icons.Outlined.Refresh, enabled && !model.refreshing) {
-                model.task(tr("Refreshing devices")) { model.refreshDevices(true) }
-            }
+        AndroidConnectionWizard(model, enabled)
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(tr("ADB devices"), fontWeight = FontWeight.SemiBold)
             Action(tr("Restart ADB"), enabled = enabled, onClick = model::restartAdb)
         }
-        if (model.devices.isEmpty())
-            Panel(
-                tr("No devices"),
-                tr(
-                    "Enable USB debugging, connect Android and confirm the computer's RSA key on the phone."
-                ),
-            ) {
-                Text(
-                    tr(
-                        "Android 11+ supports wireless pairing. The pairing address/port differs from the connection address."
-                    ),
-                    color = Muted,
-                )
-            }
+        if (model.devices.isEmpty()) Text(tr("No devices"), color = Muted)
         model.devices.forEach { device ->
             Surface(
                 shape = RoundedCornerShape(10.dp),
@@ -68,8 +55,7 @@ fun DevicesScreen(model: AppState) {
                     horizontalArrangement = Arrangement.spacedBy(14.dp),
                 ) {
                     Icon(
-                        if (device.serial.contains(":")) Icons.Outlined.Wifi
-                        else Icons.Outlined.PhoneAndroid,
+                        device.connection.icon,
                         null,
                         Modifier.size(30.dp),
                         tint = if (device.state == "device") Green else Amber,
@@ -132,7 +118,7 @@ fun DevicesScreen(model: AppState) {
                     Action("adb root", enabled = enabled, onClick = model::rootAdb)
                     Action(
                         tr("Disconnect Wi-Fi ADB"),
-                        enabled = enabled && model.selectedDevice?.serial?.contains(":") == true,
+                        enabled = enabled && model.selectedDevice?.connection == AndroidConnection.Wifi,
                         onClick = model::disconnect,
                     )
                 }
@@ -144,105 +130,23 @@ fun DevicesScreen(model: AppState) {
                     fontSize = 11.sp,
                 )
             }
-            Panel(
-                "Frida",
-                tr(
-                    "Target Frida {0} · server matches the active client and ABI",
-                    Adb.FRIDA_VERSION,
-                ),
-                Modifier.weight(1f),
-            ) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Action(tr("Install"), Icons.Outlined.InstallMobile, enabled) {
-                        model.installFrida()
+        }
+        Panel(
+            "Frida",
+            tr("Target Frida {0} · server matches the active client and ABI", Adb.FRIDA_VERSION),
+            Modifier.fillMaxWidth(),
+        ) {
+            FridaConnectionPanel(model, forCapture = false, enabled = enabled && !model.capturing,
+                openCapture = {
+                    if (!model.mode.isFrida) {
+                        model.mode = CaptureMode.OkHttp
                     }
-                    Action(tr("Select file…"), enabled = enabled) {
-                        chooseFile(title = tr("frida-server (extracted ELF)"))?.let {
-                            model.installFrida(it)
-                        }
-                    }
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Action(
-                        tr("Launch"),
-                        Icons.Outlined.PlayArrow,
-                        enabled,
-                        onClick = model::startFrida,
-                    )
-                    Action(
-                        tr("Stop owned server"),
-                        Icons.Outlined.Stop,
-                        enabled,
-                        onClick = model::stopFrida,
-                    )
-                }
-                Action(tr("Check status"), enabled = enabled) {
-                    model.task(tr("Frida status")) {
-                        model.outputs +=
-                            OutputWindow(
-                                title = tr("Frida status"),
-                                text =
-                                    Adb(model.settings).shell(model.serial(), "ps -A | grep frida"),
-                            )
-                    }
-                }
-                Text(
-                    tr(
-                        "The server requires root. Without root, use debuggable + Gadget in capture settings. Only the server started by this session is stopped on exit."
-                    ),
-                    color = Muted,
-                    fontSize = 11.sp,
-                )
-            }
+                    captureSetup = true
+                },
+            )
         }
     }
-    if (connection) {
-        var address by remember { mutableStateOf("") }
-        var code by remember { mutableStateOf("") }
-        var pairing by remember { mutableStateOf(false) }
-        AlertDialog(
-            onDismissRequest = { connection = false },
-            title = { Text(tr("Connect Android")) },
-            text = {
-                Column(Modifier.width(430.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Check(tr("Android 11+ pairing"), pairing) { pairing = it }
-                    Field(
-                        address,
-                        { address = it },
-                        if (pairing) tr("Pairing address IP:port")
-                        else tr("Connection address IP:port"),
-                        Modifier.fillMaxWidth(),
-                    )
-                    if (pairing)
-                        Field(
-                            code,
-                            { code = it },
-                            tr("6-digit code"),
-                            Modifier.fillMaxWidth(),
-                            password = true,
-                        )
-                    Text(
-                        tr(
-                            "Android → Developer options → Wireless debugging. After pairing, connect using the main device address."
-                        ),
-                        color = Muted,
-                    )
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    {
-                        connection = false
-                        model.connect(address, if (pairing) code else "")
-                    },
-                    enabled = address.isNotBlank() && (!pairing || code.length == 6),
-                ) {
-                    Text(if (pairing) tr("Pair") else tr("Connect"))
-                }
-            },
-            dismissButton = { TextButton({ connection = false }) { Text(tr("Cancel")) } },
-        )
-    }
+    if (captureSetup) CaptureSetup(model) { captureSetup = false }
 }
 
 @Composable

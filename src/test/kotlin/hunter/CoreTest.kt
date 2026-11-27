@@ -191,6 +191,30 @@ class CoreTest {
         assertEquals(3, devices.size)
         assertEquals("Pixel 8", devices[0].model)
         assertEquals("unauthorized", devices[1].state)
+        assertEquals(
+            listOf(AndroidConnection.Usb, AndroidConnection.Wifi, AndroidConnection.Emulator),
+            devices.map { it.connection },
+        )
+        assertEquals(
+            AndroidConnection.Wifi,
+            AndroidConnection.forSerial("adb-example._adb-tls-connect._tcp"),
+        )
+    }
+
+    @Test
+    fun `Wi-Fi discovery accepts only connection addresses with valid ports`() {
+        val services = """
+            List of discovered mdns services
+            adb-example _adb-tls-pairing._tcp. 192.168.1.10:48901
+            adb-example _adb-tls-connect._tcp. 192.168.1.10:37151
+            adb-duplicate _adb-tls-connect._tcp 192.168.1.10:37151
+            adb-ipv6 _adb-tls-connect._tcp. [2001:db8::1]:37152
+            adb-invalid _adb-tls-connect._tcp 192.168.1.11:65536
+            legacy _adb._tcp. 192.168.1.11:5555
+        """.trimIndent()
+        assertEquals(listOf("192.168.1.10:37151", "[2001:db8::1]:37152"), Adb.parseWirelessServices(services))
+        assertFalse(Adb.validAddress("192.168.1.10:0"))
+        assertFalse(Adb.validAddress("192.168.1.10:37151 --other"))
     }
 
     @Test

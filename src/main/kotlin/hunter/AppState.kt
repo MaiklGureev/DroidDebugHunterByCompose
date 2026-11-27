@@ -32,6 +32,13 @@ data class Confirmation(val title: String, val text: String, val run: () -> Unit
 
 data class CaptureCheck(val title: String, val ready: Boolean?, val detail: String)
 
+private data class FridaCheckTarget(
+    val config: Settings,
+    val device: Device?,
+    val app: AndroidApp?,
+    val mode: CaptureMode?,
+)
+
 class AppState {
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     var settings by mutableStateOf(Settings.load().also { I18n.use(it.language) })
@@ -56,6 +63,9 @@ class AppState {
     var refreshing by mutableStateOf(false)
         private set
 
+    var wirelessAddresses by mutableStateOf(emptyList<String>())
+        private set
+
     var apps by mutableStateOf(emptyList<AndroidApp>())
         private set
 
@@ -75,6 +85,8 @@ class AppState {
     var logOptions by mutableStateOf(LogOptions())
     var modeChecks by mutableStateOf(emptyList<CaptureCheck>())
         private set
+
+    private var fridaCheck by mutableStateOf<Pair<FridaCheckTarget, FridaDiagnosis>?>(null)
 
     var toolDirectoryWarnings by mutableStateOf(emptyList<String>())
         private set
@@ -114,6 +126,7 @@ class AppState {
     private val incomingLogs = Channel<LogEntry>(4096)
     private val messages = Channel<String>(1024)
     private var operation: Job? = null
+    private val deviceRefreshMutex = Mutex()
     private val settingsSaveMutex = Mutex()
     private var capture: CaptureSession? = null
     private var logcat: LogcatSession? = null
@@ -232,8 +245,7 @@ class AppState {
         status = tr("Language changed")
     }
 
-    suspend fun refreshDevices(showError: Boolean = false) {
-        if (refreshing) return
+    suspend fun refreshDevices(showError: Boolean = false) = deviceRefreshMutex.withLock {
         refreshing = true
         try {
             val new = Adb(settings).devices()
@@ -247,6 +259,7 @@ class AppState {
                 selectedDevice?.serial != chosen?.serial ||
                     (selectedDevice?.state == "device" && chosen?.state != "device")
             ) {
+                fridaCheck = null
                 stopCapture()
                 stopLogcat()
                 apps = emptyList()
@@ -272,15 +285,22 @@ class AppState {
 
     fun selectDevice(device: Device) =
         task(tr("Switching device")) {
+            chooseDevice(device)
+        }
+
+    private suspend fun chooseDevice(device: Device) {
+        if (selectedDevice?.serial != device.serial) {
+            fridaCheck = null
             stopCapture()
             stopLogcat()
-            selectedDevice = device
             apps = emptyList()
             selectedApp = null
             permissions = emptyList()
-            updateSettings(settings.copy(lastSerial = device.serial))
-            status = tr("Selected: {0}", device.label)
         }
+        selectedDevice = device
+        updateSettings(settings.copy(lastSerial = device.serial))
+        status = tr("Selected: {0}", device.label)
+    }
 
     fun serial(): String =
         selectedDevice?.takeIf { it.state == "device" }?.serial
@@ -371,9 +391,24 @@ class AppState {
             status = tr("Permissions updated")
         }
 
-    fun connect(address: String, code: String) =
+    fun connect(address: String, code: String = "", onSuccess: () -> Unit = {}) =
         task(if (code.isBlank()) tr("Connecting ADB") else tr("Pairing ADB")) {
-            status = Adb(settings).connect(address, code)
+            val endpoint = address.trim()
+            status = Adb(settings).connect(endpoint, code)
+            refreshDevices(true)
+            if (code.isBlank()) {
+                devices.firstOrNull { it.serial == endpoint && it.state == "device" }
+                    ?.let { chooseDevice(it) }
+            }
+            onSuccess()
+        }
+
+    fun discoverWireless() =
+        task(tr("Finding Wi-Fi devices")) {
+            wirelessAddresses = emptyList()
+            wirelessAddresses = Adb(settings).discoverWireless()
+            status = if (wirelessAddresses.isEmpty()) tr("No Wi-Fi addresses found. Enter the address from Android.")
+                else tr("Found {0} Wi-Fi addresses", wirelessAddresses.size)
             refreshDevices(true)
         }
 
@@ -459,6 +494,7 @@ class AppState {
                 capturing = true
                 status = tr("{0}: capture active", selectedMode.title)
             } catch (e: Exception) {
+                if (selectedMode.isFrida) fridaCheck = null
                 stopCapture()
                 throw e
             }
@@ -724,8 +760,29 @@ class AppState {
             }
             ?.sortedBy { it.name } ?: emptyList()
 
-    fun installFrida(file: File? = null) =
+    private fun fridaTarget(forCapture: Boolean) =
+        FridaCheckTarget(settings, selectedDevice,
+            if (forCapture) selectedApp else null, if (forCapture) mode else null)
+
+    fun fridaDiagnosis(forCapture: Boolean): FridaDiagnosis? =
+        fridaCheck?.takeIf { it.first == fridaTarget(forCapture) }?.second
+
+    private suspend fun refreshFridaDiagnosis(forCapture: Boolean) {
+        fridaCheck = null
+        val target = fridaTarget(forCapture)
+        val result = diagnoseFrida(target.config, target.device, target.app, target.mode, ::report)
+        if (fridaTarget(forCapture) == target) {
+            fridaCheck = target to result
+            status = tr("Frida check completed")
+        }
+    }
+
+    fun checkFrida(forCapture: Boolean) =
+        task(tr("Checking Frida connection")) { refreshFridaDiagnosis(forCapture) }
+
+    fun installFrida(file: File? = null, forCapture: Boolean = false) =
         task(tr("Installing frida-server")) {
+            fridaCheck = null
             val target = serial()
             val adb = Adb(settings)
             val arch = adb.architecture(target)
@@ -739,7 +796,7 @@ class AppState {
                     }
                     ?: error(tr("No frida-server {0} for {1}", clientVersion, arch))
             withContext(Dispatchers.IO) { Adb.validateElf(server, arch) }
-            val remote = "/data/local/tmp/ddhc-frida-server"
+            val remote = MANAGED_FRIDA_SERVER
             check(fridaPid == null) { tr("Stop the frida-server started by this session first") }
             adb.device(target, "push", server.absolutePath, remote, timeout = 120000)
                 .requireSuccess()
@@ -749,15 +806,17 @@ class AppState {
                 tr("Server version is {0}; {1} is required", version, clientVersion)
             }
             status = tr("frida-server {0} ({1}) installed", version, arch)
+            refreshFridaDiagnosis(forCapture)
         }
 
-    fun startFrida() =
+    fun startFrida(forCapture: Boolean = false) =
         task(tr("Starting frida-server")) {
+            fridaCheck = null
             check(fridaPid == null) { tr("This session has already started the server") }
             val target = serial()
             val adb = Adb(settings)
             val clientVersion = ToolInspector.fridaVersion(settings)
-            val serverVersion = adb.shell(target, "/data/local/tmp/ddhc-frida-server --version")
+            val serverVersion = adb.shell(target, "$MANAGED_FRIDA_SERVER --version")
             check(serverVersion == clientVersion) {
                 tr("Server version is {0}; {1} is required", serverVersion, clientVersion)
             }
@@ -765,7 +824,7 @@ class AppState {
                 report(ToolPolicy.notice("frida", clientVersion))
             val root = adb.shell(target, "id").contains("uid=0")
             val command =
-                "/data/local/tmp/ddhc-frida-server >/data/local/tmp/ddhc-frida.log 2>&1 & echo \$!"
+                "$MANAGED_FRIDA_SERVER >/data/local/tmp/ddhc-frida.log 2>&1 & echo \$!"
             val pid =
                 adb.shell(
                         target,
@@ -781,7 +840,10 @@ class AppState {
                 tr("frida-server exited. Check root and port 27042.")
             }
             status = tr("frida-server active · PID {0}", pid)
+            refreshFridaDiagnosis(forCapture)
         }
+
+    fun ownsFridaServer() = fridaPid != null
 
     suspend fun stopFridaOwned() {
         val (target, pid) = fridaPid ?: return
@@ -793,6 +855,7 @@ class AppState {
         }
         fridaPid = null
         fridaSettings = null
+        fridaCheck = null
     }
 
     fun stopFrida() =
@@ -835,7 +898,11 @@ class AppState {
             status = tr("Check completed")
         }
 
-    fun checkCapture() =
+    fun checkCapture() {
+        if (mode.isFrida) {
+            checkFrida(forCapture = true)
+            return
+        }
         task(tr("Checking capture readiness")) {
             val config = settings
             val selectedMode = mode
@@ -867,99 +934,48 @@ class AppState {
                     adb.validateApp(target.serial, app)
                     tr("{0} · UID {1} · profile {2}", app.packageName, app.uid, app.user)
                 }
-            var activeFridaVersion: String? = null
             check(tr("Python engine")) {
-                val code =
-                    if (selectedMode == CaptureMode.Proxy || selectedMode == CaptureMode.Vpn)
-                        "import mitmproxy, mitmproxy_rs; print('mitmproxy: OK')"
-                    else
-                        "import frida, frida_tools.repl; " +
-                            (if (selectedMode == CaptureMode.Native) "import h11, hpack; "
-                            else "") +
-                            "print(frida.__version__)"
-                val result =
-                    Processes.run(
-                            listOf(config.pythonCommand, "-c", code),
-                            config.environment(
-                                if (
-                                    selectedMode == CaptureMode.Proxy ||
-                                        selectedMode == CaptureMode.Vpn
-                                )
-                                    "proxy"
-                                else "capture"
-                            ),
-                            15000,
-                        )
-                        .requireSuccess()
-                if (selectedMode == CaptureMode.OkHttp || selectedMode == CaptureMode.Native)
-                    activeFridaVersion = result
-                result
+                Processes.run(
+                    listOf(config.pythonCommand, "-c", "import mitmproxy, mitmproxy_rs; print('mitmproxy: OK')"),
+                    config.environment("proxy"),
+                    15000,
+                ).requireSuccess()
             }
-            if (selectedMode == CaptureMode.OkHttp || selectedMode == CaptureMode.Native) {
-                val clientVersion = activeFridaVersion ?: config.setup.version("frida")
-                if (clientVersion != ToolPolicy.target("frida"))
-                    checks += CaptureCheck("Frida", null, ToolPolicy.notice("frida", clientVersion))
-                if (config.gadget)
-                    check("Gadget / run-as") {
-                        requireNotNull(app)
-                        requireNotNull(target)
-                        check(config.spawn) { tr("Enable app launch at startup") }
-                        adb.shell(target.serial, "run-as ${Adb.quote(app.packageName)} id")
-                        val arch = adb.architecture(target.serial, app)
-                        val file =
-                            File(
-                                config.tools,
-                                "frida-gadget/frida-gadget-$clientVersion-android-$arch.so",
+            checks +=
+                CaptureCheck(
+                    "HTTPS / CA",
+                    null,
+                    if (AppFiles.ca.isFile)
+                        tr("CA prepared. Confirm CA installation and trust on Android.")
+                    else tr("Prepare and install the CA on Android for HTTPS."),
+                )
+            if (selectedMode == CaptureMode.Vpn) {
+                check("VPN endpoint") { CaptureSession.endpoint(config) }
+                check("WireGuard") {
+                    requireNotNull(target)
+                    requireNotNull(app)
+                    val installed =
+                        adb.shell(
+                                target.serial,
+                                "pm path --user ${app.user} com.wireguard.android",
                             )
-                        withContext(Dispatchers.IO) { Adb.validateElf(file, arch) }
-                        tr("Gadget {0} found; run-as is available", arch)
-                    }
-                else
-                    check("frida-server") {
-                        requireNotNull(target)
-                        val processes = adb.shell(target.serial, "ps -A")
-                        check(processes.contains("frida", true)) {
-                            tr("frida-server not found. Install and start it on the device.")
-                        }
-                        tr("Frida process found; compatibility is checked on connection")
-                    }
-            } else {
+                            .contains("package:")
+                    val apk =
+                        File(config.tools, "android-tools").listFiles()?.any {
+                            it.extension == "apk"
+                        } == true
+                    check(installed || apk) { tr("WireGuard is not installed; no local APK") }
+                    if (installed) tr("WireGuard installed")
+                    else tr("Local APK found; install when sending the profile")
+                }
                 checks +=
                     CaptureCheck(
-                        "HTTPS / CA",
+                        tr("VPN permission"),
                         null,
-                        if (AppFiles.ca.isFile)
-                            tr("CA prepared. Confirm CA installation and trust on Android.")
-                        else tr("Prepare and install the CA on Android for HTTPS."),
+                        tr(
+                            "Import the profile, confirm VPN consent and enable the tunnel on the phone."
+                        ),
                     )
-                if (selectedMode == CaptureMode.Vpn) {
-                    check("VPN endpoint") { CaptureSession.endpoint(config) }
-                    check("WireGuard") {
-                        requireNotNull(target)
-                        requireNotNull(app)
-                        val installed =
-                            adb.shell(
-                                    target.serial,
-                                    "pm path --user ${app.user} com.wireguard.android",
-                                )
-                                .contains("package:")
-                        val apk =
-                            File(config.tools, "android-tools").listFiles()?.any {
-                                it.extension == "apk"
-                            } == true
-                        check(installed || apk) { tr("WireGuard is not installed; no local APK") }
-                        if (installed) tr("WireGuard installed")
-                        else tr("Local APK found; install when sending the profile")
-                    }
-                    checks +=
-                        CaptureCheck(
-                            tr("VPN permission"),
-                            null,
-                            tr(
-                                "Import the profile, confirm VPN consent and enable the tunnel on the phone."
-                            ),
-                        )
-                }
             }
             modeChecks = checks.toList()
             status =
@@ -967,12 +983,14 @@ class AppState {
                     tr("Startup prerequisites failed: see the checklist")
                 else tr("Automatic checks passed; complete the manual Android steps")
         }
+    }
 
     fun setupTools(component: String) =
         task(tr("Preparing tools")) {
             check(!capturing && !logging && fridaPid == null) {
                 tr("Stop capture, Logcat and the owned Frida server before preparing tools.")
             }
+            fridaCheck = null
             setupLiveLog = ""
             setupProgress = SetupProgress(tr("Preparing tools"))
             val log = StringBuilder()

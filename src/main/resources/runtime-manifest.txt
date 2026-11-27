@@ -2,6 +2,7 @@ runtime/AndroidHelper/AppLabels.java
 runtime/AndroidHelper/app-labels.dex
 runtime/agents/capture_diagnostics.py
 runtime/agents/capture_setup.py
+runtime/agents/frida_probe.py
 runtime/agents/native_backend.py
 runtime/agents/native_tls.js
 runtime/agents/okhttp.js
