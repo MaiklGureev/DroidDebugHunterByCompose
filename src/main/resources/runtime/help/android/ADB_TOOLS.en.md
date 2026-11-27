@@ -28,4 +28,4 @@ Results open in separate windows. Copy all (`Копировать всё`) and S
 
 ADB tools provides file push/pull and APK installation. Use accessible Android paths; private data is subject to device permissions. Turning off Wi-Fi can disconnect wireless ADB; restore networking on the phone or use USB.
 
-Remove app data/secrets before publishing output. See [connection setup](ANDROID_SETUP_GUIDE.en.md) and [streaming Logcat](LOGCAT.en.md).
+Remove app data/secrets before publishing output. See [connection setup](../setup/ANDROID_SETUP_GUIDE.en.md) and [streaming Logcat](LOGCAT.en.md).

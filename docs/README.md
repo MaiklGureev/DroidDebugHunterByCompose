@@ -6,12 +6,12 @@
 | --- | --- | --- |
 | Overview / build from source | [README](../README.md) | [README](../README.ru.md) |
 | First run | [Guide](README-FIRST.md) | [Руководство](README-FIRST.ru.md) |
-| User guide | [Guide](../src/main/resources/runtime/help/USAGE.en.md) | [Руководство](../src/main/resources/runtime/help/USAGE.md) |
-| Android and capture setup | [Guide](../src/main/resources/runtime/help/ANDROID_SETUP_GUIDE.en.md) | [Руководство](../src/main/resources/runtime/help/ANDROID_SETUP_GUIDE.md) |
-| ADB operations | [Guide](../src/main/resources/runtime/help/ADB_TOOLS.en.md) | [Руководство](../src/main/resources/runtime/help/ADB_TOOLS.md) |
-| Logcat | [Guide](../src/main/resources/runtime/help/LOGCAT.en.md) | [Руководство](../src/main/resources/runtime/help/LOGCAT.md) |
-| Request and response content | [Guide](../src/main/resources/runtime/help/BODY_VIEWER.en.md) | [Руководство](../src/main/resources/runtime/help/BODY_VIEWER.md) |
-| Tool preparation | [Guide](../src/main/resources/runtime/help/DOWNLOADS.en.md) | [Руководство](../src/main/resources/runtime/help/DOWNLOADS.md) |
+| User guide | [Guide](../src/main/resources/runtime/help/guides/USAGE.en.md) | [Руководство](../src/main/resources/runtime/help/guides/USAGE.md) |
+| Android and capture setup | [Guide](../src/main/resources/runtime/help/setup/ANDROID_SETUP_GUIDE.en.md) | [Руководство](../src/main/resources/runtime/help/setup/ANDROID_SETUP_GUIDE.md) |
+| ADB operations | [Guide](../src/main/resources/runtime/help/android/ADB_TOOLS.en.md) | [Руководство](../src/main/resources/runtime/help/android/ADB_TOOLS.md) |
+| Logcat | [Guide](../src/main/resources/runtime/help/android/LOGCAT.en.md) | [Руководство](../src/main/resources/runtime/help/android/LOGCAT.md) |
+| Request and response content | [Guide](../src/main/resources/runtime/help/guides/BODY_VIEWER.en.md) | [Руководство](../src/main/resources/runtime/help/guides/BODY_VIEWER.md) |
+| Tool preparation | [Guide](../src/main/resources/runtime/help/setup/DOWNLOADS.en.md) | [Руководство](../src/main/resources/runtime/help/setup/DOWNLOADS.md) |
 | Windows / macOS / Linux | [Platforms](PLATFORMS.md) | [Платформы](PLATFORMS.ru.md) |
 | Architecture | [Architecture](ARCHITECTURE.md) | [Архитектура](ARCHITECTURE.ru.md) |
 | Release process | [Releasing](RELEASING.md) | [Выпуск](RELEASING.ru.md) |

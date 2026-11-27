@@ -24,4 +24,4 @@ Export snapshots selected, filtered or all accumulated rows while recording may 
 
 Clearing the window does not clear Android buffers. Older rows are evicted by the count limit or approximate 64 MiB memory budget. The bounded queue counts overload drops. Received/evicted/dropped counters expose data loss; exports cannot recover lost rows.
 
-[ADB operations](ADB_TOOLS.en.md), [user guide](USAGE.en.md).
+[ADB operations](ADB_TOOLS.en.md), [user guide](../guides/USAGE.en.md).

@@ -122,20 +122,20 @@ class LanguageTest {
     fun `all help topics have resources for each interface language`() {
         val topics =
             listOf(
-                "USAGE.md",
-                "PLATFORMS.md",
-                "ANDROID_SETUP_GUIDE.md",
-                "ADB_TOOLS.md",
-                "LOGCAT.md",
-                "BODY_VIEWER.md",
-                "DOWNLOADS.md",
-                "THIRD_PARTY_NOTICES.md",
+                "guides/USAGE.md",
+                "setup/PLATFORMS.md",
+                "setup/ANDROID_SETUP_GUIDE.md",
+                "android/ADB_TOOLS.md",
+                "android/LOGCAT.md",
+                "guides/BODY_VIEWER.md",
+                "setup/DOWNLOADS.md",
+                "legal/THIRD_PARTY_NOTICES.md",
             )
         for (language in UiLanguage.entries) for (topic in topics) {
             val path = "runtime/help/${language.helpFile(topic)}"
             assertNotNull(javaClass.classLoader.getResource(path), path)
         }
-        assertEquals("LOGCAT.en.md", UiLanguage.English.helpFile("LOGCAT.md"))
-        assertEquals("LOGCAT.md", UiLanguage.Russian.helpFile("LOGCAT.md"))
+        assertEquals("android/LOGCAT.en.md", UiLanguage.English.helpFile("android/LOGCAT.md"))
+        assertEquals("android/LOGCAT.md", UiLanguage.Russian.helpFile("android/LOGCAT.md"))
     }
 }

@@ -32,7 +32,7 @@ fun checkApplication(): Map<String, Any> {
                     }
                     val markdown =
                         Markdown.parse(
-                            Markdown.read(File(AppFiles.runtime, "help/ADB_TOOLS.en.md"))
+                            Markdown.read(File(AppFiles.runtime, "help/android/ADB_TOOLS.en.md"))
                         )
                     check(markdown.blocks.any { it is org.commonmark.ext.gfm.tables.TableBlock }) {
                         "Packaged Markdown table parser is unavailable"

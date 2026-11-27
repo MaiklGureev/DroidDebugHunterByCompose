@@ -20,7 +20,7 @@ Android 11+: enable wireless debugging. On the **Wi-Fi** card, enter the pairing
 
 For an Android Studio emulator, start the virtual device in Device Manager, wait for Android to boot, and refresh from the **Emulator** card. Use **Wi-Fi** for emulators that provide an ADB network address.
 
-On **Traffic**, refresh the app list and select the current Android profile's package. Refresh again after switching profiles. UID is not PID; App ID = UID % 100000. See [ADB operations](ADB_TOOLS.en.md).
+On **Traffic**, refresh the app list and select the current Android profile's package. Refresh again after switching profiles. UID is not PID; App ID = UID % 100000. See [ADB operations](../android/ADB_TOOLS.en.md).
 
 ## 3. Choose a mode
 
@@ -84,7 +84,7 @@ Reference the resource with `android:networkSecurityConfig` in the debug manifes
 
 ## HAR, Logcat and troubleshooting
 
-Export HAR from a browser's DevTools Network panel and open it with Ctrl+O. If capture only produces diagnostic events, inspect messages/fragments in details and the journal rather than expecting HTTP without decoding. See [usage](USAGE.en.md), [bodies](BODY_VIEWER.en.md) and [Logcat](LOGCAT.en.md).
+Export HAR from a browser's DevTools Network panel and open it with Ctrl+O. If capture only produces diagnostic events, inspect messages/fragments in details and the journal rather than expecting HTTP without decoding. See [usage](../guides/USAGE.en.md), [bodies](../guides/BODY_VIEWER.en.md) and [Logcat](../android/LOGCAT.en.md).
 
 No device: check ADB/serial/RSA. No Frida: versions, ABI, root/Gadget and engine output. No HTTPS: CA, debug APK trust, pinning and network stack. No VPN: address, UDP, profile and consent. No new traffic: trigger an uncached action in the correct process. Save diagnostic output as TXT and remove secrets before sharing.
 

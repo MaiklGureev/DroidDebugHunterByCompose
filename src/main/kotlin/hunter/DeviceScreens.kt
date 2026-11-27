@@ -523,13 +523,13 @@ fun HelpScreen(model: AppState) {
     val files =
         listOf(
             "",
-            "PLATFORMS.md",
-            "ANDROID_SETUP_GUIDE.md",
-            "ADB_TOOLS.md",
-            "LOGCAT.md",
-            "BODY_VIEWER.md",
-            "DOWNLOADS.md",
-            "THIRD_PARTY_NOTICES.md",
+            "setup/PLATFORMS.md",
+            "setup/ANDROID_SETUP_GUIDE.md",
+            "android/ADB_TOOLS.md",
+            "android/LOGCAT.md",
+            "guides/BODY_VIEWER.md",
+            "setup/DOWNLOADS.md",
+            "legal/THIRD_PARTY_NOTICES.md",
         )
     var topic by remember { mutableStateOf(0) }
     val language = model.settings.language

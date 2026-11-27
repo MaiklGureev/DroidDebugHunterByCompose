@@ -117,7 +117,7 @@ class MarkdownTest {
     }
 
     @Test
-    fun `all bundled guides parse in both languages`() {
+    fun `all bundled guides parse and link to bundled files`(@TempDir root: Path) {
         val loader = javaClass.classLoader
         val files =
             loader.getResourceAsStream("runtime-manifest.txt")!!.bufferedReader().use {
@@ -125,11 +125,26 @@ class MarkdownTest {
             }
         val guides = files.filter { it.startsWith("runtime/help/") && it.endsWith(".md") }
         assertEquals(16, guides.size)
+        val base = root.toFile().canonicalFile
+        val help = File(base, "runtime/help")
         for (path in guides) {
             val source = loader.getResourceAsStream(path)!!.bufferedReader().use { it.readText() }
             val document = Markdown.parse(source)
             assertTrue(document.blocks.isNotEmpty(), path)
             assertTrue(document.blocks.first() is Heading, path)
+            val location = MarkdownLocation(File(base, path), help)
+            val pending = ArrayDeque(document.blocks)
+            while (pending.isNotEmpty()) {
+                val node = pending.removeLast()
+                pending.addAll(node.children())
+                if (node is Link) {
+                    val description = "$path -> ${node.destination}"
+                    val target = assertNotNull(resolveMarkdownLink(location, node.destination), description)
+                    if (target is MarkdownTarget.Document) {
+                        assertContains(files, target.location.file.relativeTo(base).invariantSeparatorsPath, description)
+                    }
+                }
+            }
         }
     }
 }

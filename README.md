@@ -4,7 +4,7 @@
 
 An Android debugging desktop application built with **Kotlin, Compose Desktop and coroutines**. Manage ADB devices and apps, control Frida, inspect HTTP(S) traffic and stream Logcat on **Windows, macOS and Linux**. This is the Compose port of the [WPF DroidDebugHunter](https://github.com/MaiklGureev/DroidDebugHunter).
 
-[Download a release](https://github.com/MaiklGureev/DroidDebugHunterByCompose/releases) · [Documentation](docs/README.md) · [Android setup](src/main/resources/runtime/help/ANDROID_SETUP_GUIDE.en.md) · [MIT license](LICENSE)
+[Download a release](https://github.com/MaiklGureev/DroidDebugHunterByCompose/releases) · [Documentation](docs/README.md) · [Android setup](src/main/resources/runtime/help/setup/ANDROID_SETUP_GUIDE.en.md) · [MIT license](LICENSE)
 
 Native distributions include their own Java runtime: **users do not need a system JDK or JRE**. Downloads support Windows x64, Linux x64, and macOS Apple Silicon and Intel. ADB, Python and capture tools are configured separately. The interface supports English and Russian. Switch in Settings → Interface language; the choice is saved automatically and applies immediately, including offline Help. The initial language follows the OS (Russian for ru, English otherwise).
 
@@ -71,7 +71,7 @@ Gradle's `run` task uses a separate temporary JAR copy, so rebuilding does not r
 
 Large binaries are **excluded from Git**. Bundles normally live in `desktop-resources/<os>-<arch>/tools/`, such as `windows-x64`, `macos-arm64` or `linux-x64`, or in packaged app resources. You can select another directory and individual ADB/Python executables, including a virtual environment. Detection also checks Android SDK and PATH. Settings keep separate paths for each OS/CPU.
 
-On **Connection**, each tool shows its status, folder and options. Use **Manual download** for links and placement instructions or **Download and prepare** to let the app fetch the tool. The wizard supports portable Python via uv without a system interpreter or administrator elevation, existing Python/venv, local archives and offline wheelhouses. Downloads show progress and a live log, with cancellation. Components can be prepared separately or as a Frida bundle; individual archives/APKs can be downloaded without installation. Versioned links can be copied, and placement/cache folders opened. Missing directories are created on startup when writable; the guide includes the complete manual folder layout. Other versions are allowed with warnings; see the [version matrix and setup guide](src/main/resources/runtime/help/DOWNLOADS.en.md).
+On **Connection**, each tool shows its status, folder and options. Use **Manual download** for links and placement instructions or **Download and prepare** to let the app fetch the tool. The wizard supports portable Python via uv without a system interpreter or administrator elevation, existing Python/venv, local archives and offline wheelhouses. Downloads show progress and a live log, with cancellation. Components can be prepared separately or as a Frida bundle; individual archives/APKs can be downloaded without installation. Versioned links can be copied, and placement/cache folders opened. Missing directories are created on startup when writable; the guide includes the complete manual folder layout. Other versions are allowed with warnings; see the [version matrix and setup guide](src/main/resources/runtime/help/setup/DOWNLOADS.en.md).
 
 Prepare tools from the CLI on the **target OS/CPU**, using an existing Python **3.11+** (target **3.14.10**, proxy **3.12+**) (`python` on Windows, `python3` on macOS/Linux):
 
@@ -93,7 +93,7 @@ Windows also provides a wrapper:
 
 `-CopyPython` copies a full installed 64-bit Python 3.11+ interpreter. Target versions are in `tool-versions.json`; target Python 3.14 dependencies are frozen in the requirements files. Custom versions/interpreters use package metadata for resolution. Frida client/server/Gadget must match each other; the target is **17.26.2**.
 
-The same checks/preparation are available in **Connection**. Normal startup downloads nothing. Settings, traffic, CA certificates and VPN keys are not imported from the old project. See [platform configuration](docs/PLATFORMS.md) and [tool preparation](src/main/resources/runtime/help/DOWNLOADS.en.md).
+The same checks/preparation are available in **Connection**. Normal startup downloads nothing. Settings, traffic, CA certificates and VPN keys are not imported from the old project. See [platform configuration](docs/PLATFORMS.md) and [tool preparation](src/main/resources/runtime/help/setup/DOWNLOADS.en.md).
 
 ## Connect a phone
 
@@ -103,7 +103,7 @@ The same checks/preparation are available in **Connection**. Normal startup down
 
 A regular proxy cannot identify the package/UID. VPN attribution comes from its configured allowlist. HTTPS proxy/VPN capture requires the target app to trust the CA. Pinning, unavailable TLS functions and HTTP/3 can limit capture. Rootless Frida requires a debuggable APK with working `run-as`/JDWP.
 
-See the [user guide](src/main/resources/runtime/help/USAGE.en.md) and [Android setup](src/main/resources/runtime/help/ANDROID_SETUP_GUIDE.en.md). Help works offline; HAR analysis is available without Android.
+See the [user guide](src/main/resources/runtime/help/guides/USAGE.en.md) and [Android setup](src/main/resources/runtime/help/setup/ANDROID_SETUP_GUIDE.en.md). Help works offline; HAR analysis is available without Android.
 
 ## Markdown help
 
