@@ -23,11 +23,13 @@ The reference configuration is recorded in `tool-setup/tool-versions.json` (revi
 
 ## Three setup modes
 
-Setup approaches, components and Python methods are shown as visible selection cards, not hidden in dropdowns. Choose an approach and a component explicitly, then a Python method when needed. Preparation remains disabled until the required choices are made. Previously saved approach/method choices are restored; downloads still require a button press.
+On **Connection**, open **Configure tools** in **ADB software** or **Capture software**. ADB is shared by USB, Wi-Fi and Emulator. The capture block shows the components for the current mode and displays detected and target versions. Choose an approach, component and Python method when needed. Downloads start when you press the preparation button.
 
 - **Manual:** select ADB/Python executables or PATH commands, use an existing venv or unpack official archives yourself. Check versions and open **Plan / manual instructions** for commands and package-manager alternatives. This mode installs nothing.
 - **Guided:** select a component, method and versions; inspect the plan, then prepare it. ADB can be downloaded/unpacked independently of Python.
-- **Automatic:** prepare all components with the selected method first. If Python preparation fails, try the other local methods; if the selected tools folder is not writable, try the app's user data folder. Failures remain in the log. Checksum failures stop installation.
+- **Automatic:** from ADB software, prepare only ADB. From Capture software, prepare ADB and the components for the current capture mode. If Python preparation fails, try the other local methods. If the selected tools folder is read-only, try the app's user data folder.
+
+During a batch, a failed download leaves that component unfinished. Independent steps continue, including the standalone WireGuard APK if Python is unavailable. Steps that require a missing prerequisite are marked **Skipped**. An invalid download is rejected. Use **Retry unfinished components** or **Download links / folders** to recover, then **Check tools** after placing files manually.
 
 Modes, methods, selected versions, offline/cache settings and executable paths are saved per OS/CPU profile.
 
@@ -49,7 +51,7 @@ The setup area shows the current stage and a live log. Direct file downloads sho
 
 ## Offline preparation
 
-Enable **Offline** and choose a cache folder. Optional **Local Platform Tools ZIP** imports an archive directly; its revision must match the selected ADB version. Choose that archive's version in Settings if needed. A local uv executable can also be selected.
+Enable **Offline** and choose a cache folder. Optional **Local Platform Tools ZIP** imports an archive directly. Set the archive's revision in the ADB software block. A local uv executable can also be selected.
 
 Cache layout:
 

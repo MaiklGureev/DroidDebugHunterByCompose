@@ -6,7 +6,7 @@ Use devices/apps you are authorized to inspect. Commands target the selected ser
 
 ## 1. Prepare the computer
 
-Native Compose packages include Java. Devices need ADB; live capture targets Python 3.14.10 (alternatives are allowed with compatibility warnings) and the selected mode's components. In Settings → Tools (`Настройки → Инструменты`), configure paths, apply, prepare components and check the bundle. See [tools](DOWNLOADS.en.md) and [platforms](PLATFORMS.en.md).
+Native Compose packages include Java. Devices need ADB; live capture targets Python 3.14.10 (alternatives are allowed with compatibility warnings) and the selected mode's components. In **Connection**, configure paths, apply, prepare components and check the bundle. See [tools](DOWNLOADS.en.md) and [platforms](PLATFORMS.en.md).
 
 Windows, macOS and Linux need their own ADB/Python/wheels. Android server/Gadget binaries depend on device or app ABI. Frida client/server/Gadget must match each other; the target is 17.26.2, with other matching versions allowed. Normal startup downloads nothing.
 

@@ -18,7 +18,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.io.File
-import javax.swing.JFileChooser
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -436,96 +435,6 @@ fun SettingsScreen(model: AppState) {
                 Modifier.width(230.dp),
             )
             Text(tr("Language changes immediately and is saved automatically."), color = Muted)
-        }
-        Panel(
-            tr("Tools"),
-            tr(
-                "External dependencies use a local directory. Downloads require a separate command."
-            ),
-            Modifier.fillMaxWidth(),
-        ) {
-            Text(tr("Platform: {0}", HostPlatform.current.label), color = Accent)
-            Text(
-                tr(
-                    "ADB and Python are selected for this OS/CPU. Enter an executable path or PATH command; a venv is supported."
-                ),
-                color = Muted,
-                fontSize = 11.sp,
-            )
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Field(
-                    draft.tools,
-                    { draft = draft.copy(tools = it) },
-                    tr("Tool bundle directory"),
-                    Modifier.weight(1f),
-                    enabled,
-                )
-                Action(tr("Folder…"), enabled = enabled) {
-                    val dialog =
-                        JFileChooser(draft.tools).apply {
-                            locale = java.util.Locale.forLanguageTag(model.settings.language.code)
-                            dialogTitle = tr("Tool bundle directory")
-                            approveButtonText = tr("Select")
-                            fileSelectionMode = JFileChooser.DIRECTORIES_ONLY
-                        }
-                    if (dialog.showOpenDialog(null) == JFileChooser.APPROVE_OPTION)
-                        draft = draft.copy(tools = dialog.selectedFile.absolutePath)
-                }
-                MiniIcon(Icons.Outlined.FolderOpen, tr("Open directory")) {
-                    File(draft.tools).mkdirs()
-                    openFile(model, File(draft.tools))
-                }
-            }
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Field(
-                    draft.adb,
-                    { draft = draft.copy(adb = it) },
-                    tr("ADB (empty = bundle / PATH)"),
-                    Modifier.weight(1f),
-                    enabled,
-                )
-                Action(tr("Select…"), enabled = enabled) {
-                    chooseFile(title = HostPlatform.current.executable("adb"))?.let {
-                        draft = draft.copy(adb = it.absolutePath)
-                    }
-                }
-            }
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Field(
-                    draft.python,
-                    { draft = draft.copy(python = it) },
-                    tr("Python executable (empty = auto)"),
-                    Modifier.weight(1f),
-                    enabled,
-                )
-                Action(tr("Select…"), enabled = enabled) {
-                    chooseFile(
-                            title = HostPlatform.current.executable(HostPlatform.current.pythonName)
-                        )
-                        ?.let { draft = draft.copy(python = it.absolutePath) }
-                }
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Action(tr("Save"), Icons.Outlined.Save, enabled, primary = true) {
-                    model.updateSettings(draft)
-                    model.status = tr("Settings saved")
-                }
-                Action(tr("Check"), Icons.Outlined.CheckCircleOutline, enabled) {
-                    model.updateSettings(draft)
-                    model.checkTools()
-                }
-            }
-            Divider(color = Line)
-            ToolSetupPanel(model, draft, { draft = it }, enabled)
         }
         Panel(tr("Behavior and memory"), modifier = Modifier.fillMaxWidth()) {
             Check(tr("Automatically refresh devices every 5 seconds"), draft.autoRefresh, enabled) {

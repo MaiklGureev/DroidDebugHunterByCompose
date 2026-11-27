@@ -13,6 +13,44 @@ import org.junit.jupiter.api.io.TempDir
 
 class ToolchainTest {
     @Test
+    fun `offline preparation continues with an independent APK after ADB and Python fail`(
+        @TempDir dir: Path,
+    ) = runBlocking {
+        val root = dir.toFile()
+        val filename = "com.wireguard.android-${ToolPolicy.target("wireguard")}.apk"
+        val cached = File(root, "downloads/wireguard/$filename").apply { parentFile.mkdirs() }
+        ZipOutputStream(cached.outputStream()).use { zip ->
+            for (entry in listOf("AndroidManifest.xml", "classes.dex")) {
+                zip.putNextEntry(ZipEntry(entry))
+                zip.write(byteArrayOf(1, 2, 3))
+                zip.closeEntry()
+            }
+        }
+        val config = Settings(
+            tools = root.path,
+            adb = File(root, "unavailable-adb").path,
+            python = File(root, "unavailable-python").path,
+            setup = ToolSetupOptions(
+                mode = SetupMode.Automatic,
+                method = SetupMethod.Target,
+                offline = true,
+                adbArchive = File(root, "missing-platform-tools.zip").path,
+            ),
+        )
+        val result = ToolProvisioner.prepare(config, listOf("adb", "python", "proxy", "wireguard"), {}, {})
+        assertEquals(
+            mapOf("adb" to ToolStepState.Failed, "python" to ToolStepState.Failed,
+                "proxy" to ToolStepState.Skipped, "wireguard" to ToolStepState.Prepared),
+            result.steps.associate { it.component to it.state },
+        )
+        assertEquals(config.python, result.config.python)
+        assertContentEquals(
+            cached.readBytes(),
+            assertNotNull(ToolLayout.wireGuardApk(result.config)).readBytes(),
+        )
+    }
+
+    @Test
     fun `replacing a component never deletes files behind a nested directory link`(
         @TempDir dir: Path
     ) {
@@ -372,8 +410,8 @@ class ToolchainTest {
                 tools = dir.resolve("must-not-exist").toString(),
                 setup = ToolSetupOptions(mode = SetupMode.Manual),
             )
-        assertFailsWith<IllegalArgumentException> { ToolProvisioner.prepare(config, "all", {}, {}) }
+        assertFailsWith<IllegalArgumentException> { ToolProvisioner.prepare(config, listOf("all"), {}, {}) }
         assertFalse(File(config.tools).exists())
-        assertTrue(ToolProvisioner.plan(config, "all").contains(config.tools))
+        assertTrue(ToolProvisioner.plan(config, listOf("all")).contains(config.tools))
     }
 }

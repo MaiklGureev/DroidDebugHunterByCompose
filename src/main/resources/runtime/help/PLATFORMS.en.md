@@ -2,7 +2,7 @@
 
 **English** | [Русский](PLATFORMS.md)
 
-The app detects OS/CPU automatically. Settings → Tools (`Настройки → Инструменты`) shows the current platform. Choose a tools directory, ADB and Python (target 3.14.10; alternatives allowed); a virtual-environment interpreter is supported. Enter one executable path or PATH command name, without arguments or extra quotes.
+The app detects OS/CPU automatically. **Connection** shows the current platform. Choose a tools directory, ADB and Python (target 3.14.10; alternatives allowed); a virtual-environment interpreter is supported. Enter one executable path or PATH command name, without arguments or extra quotes.
 
 ## Java for users and developers
 

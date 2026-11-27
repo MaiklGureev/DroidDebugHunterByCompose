@@ -362,7 +362,10 @@ private fun CommandPalette(model: AppState, dismiss: () -> Unit) {
                         model.task(tr("Refreshing devices")) { model.refreshDevices(true) }
                     },
                 tr("Refresh apps") to model::loadApps,
-                tr("Check tools") to model::checkTools,
+                tr("Check tools") to {
+                    model.page = Page.Connection
+                    model.checkTools()
+                },
                 tr("Start / stop capture") to model::toggleCapture,
                 tr("Start / stop Logcat") to model::toggleLogcat,
             )

@@ -20,10 +20,10 @@ import java.net.URI
 import kotlinx.coroutines.*
 
 @Composable
-fun ToolSourcesDialog(model: AppState, config: Settings, component: String, close: () -> Unit) {
+fun ToolSourcesDialog(model: AppState, config: Settings, components: List<String>, close: () -> Unit) {
     val scope = rememberCoroutineScope()
     val sources =
-        remember(config.setup.versions, component) { ToolLayout.sources(config, component) }
+        remember(config.setup.versions, components) { ToolLayout.sources(config, components) }
     AlertDialog(
         onDismissRequest = close,
         title = { Text(tr("Downloads and file placement")) },

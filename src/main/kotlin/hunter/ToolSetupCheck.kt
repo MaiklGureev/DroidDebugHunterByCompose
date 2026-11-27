@@ -22,8 +22,9 @@ fun checkToolSetup(): Map<String, Any> {
             }
             var config =
                 Settings(tools = File(directory, "tools with spaces").path, autoRefresh = false)
-            config = ToolProvisioner.prepare(config, "adb", progress, ::println)
-            config = ToolProvisioner.prepare(config, "python", progress, ::println)
+            val preparation = ToolProvisioner.prepare(config, listOf("adb", "python"), progress, ::println)
+            check(preparation.steps.all { it.state == ToolStepState.Prepared }) { preparation.steps.toString() }
+            config = preparation.config
             val findings = ToolInspector.inspect(config)
             val python = findings.first { it.id == "python" }
             val adb = findings.first { it.id == "adb" }

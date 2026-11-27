@@ -17,7 +17,7 @@ enum class Page(private val labelKey: String, private val captionKey: String) {
     Apps("Apps", "Processes, permissions and data"),
     Logcat("Logcat", "Live Android logs"),
     Tools("ADB tools", "Device network and diagnostics"),
-    Settings("Settings", "Tools and behavior"),
+    Settings("Settings", "Language and behavior"),
     Help("Help", "Setup and user guide");
 
     val label
@@ -93,8 +93,13 @@ class AppState {
     var toolDirectoryWarnings by mutableStateOf(emptyList<String>())
         private set
 
-    var toolFindings by mutableStateOf(emptyList<ToolFinding>())
-        private set
+    private var toolInspection by mutableStateOf<Pair<ToolConfiguration, List<ToolFinding>>?>(null)
+    val toolFindings
+        get() = toolInspection?.takeIf { it.first == settings.toolConfiguration() }?.second.orEmpty()
+
+    private var toolPreparation by mutableStateOf<Pair<ToolConfiguration, Map<String, ToolStep>>?>(null)
+    val toolSteps
+        get() = toolPreparation?.takeIf { it.first == settings.toolConfiguration() }?.second.orEmpty()
 
     var setupProgress by mutableStateOf<SetupProgress?>(null)
         private set
@@ -277,7 +282,7 @@ class AppState {
             throw e
         } catch (e: Exception) {
             if (showError) {
-                error = tr("ADB: {0}. Check the path in Settings.", e.message)
+                error = tr("ADB: {0}. Check the ADB path on Connection.", e.message)
                 report(error)
             }
         } finally {
@@ -741,10 +746,8 @@ class AppState {
                 !adb.shell(target, "pm path --user ${app.user} com.wireguard.android")
                     .contains("package:")
             ) {
-                val apk =
-                    File(settings.tools, "android-tools").listFiles()?.firstOrNull {
-                        it.extension == "apk" && it.name.startsWith("com.wireguard.android-")
-                    } ?: error(tr("No local WireGuard APK"))
+                val apk = withContext(Dispatchers.IO) { ToolLayout.wireGuardApk(settings) }
+                    ?: error(tr("No local WireGuard APK"))
                 adb.device(
                         target,
                         "install",
@@ -861,6 +864,9 @@ class AppState {
 
     fun ownsFridaServer() = fridaPid != null
 
+    val canPrepareTools
+        get() = initialized && busy.isEmpty() && !capturing && !logging && !ownsFridaServer()
+
     suspend fun stopFridaOwned() {
         val (target, pid) = fridaPid ?: return
         val adb = Adb(fridaSettings ?: settings)
@@ -903,14 +909,25 @@ class AppState {
             }
         }
 
-    fun checkTools() =
+    suspend fun refreshToolStatus() {
+        val config = settings
+        val key = config.toolConfiguration()
+        val findings = ToolInspector.inspect(config)
+        if (settings.toolConfiguration() == key) toolInspection = key to findings
+    }
+
+    fun checkTools(refreshAdb: Boolean = false) =
         task(tr("Checking tools")) {
-            toolFindings = ToolInspector.inspect(settings)
-            outputs +=
-                OutputWindow(
-                    title = tr("Checking tools"),
-                    text = toolFindings.joinToString("\n\n") { it.summary },
-                )
+            refreshToolStatus()
+            val detected = toolFindings.associateBy { it.id }
+            val unresolved = toolSteps.filterNot { (component, step) ->
+                step.state != ToolStepState.Prepared && toolFindingIds(component).all { id ->
+                    val finding = detected[id]
+                    finding != null && !finding.failed && finding.actual == settings.setup.version(finding.versionId)
+                }
+            }
+            toolPreparation = settings.toolConfiguration() to unresolved
+            if (refreshAdb) refreshDevices(true)
             status = tr("Check completed")
         }
 
@@ -974,10 +991,7 @@ class AppState {
                                 "pm path --user ${app.user} com.wireguard.android",
                             )
                             .contains("package:")
-                    val apk =
-                        File(config.tools, "android-tools").listFiles()?.any {
-                            it.extension == "apk"
-                        } == true
+                    val apk = withContext(Dispatchers.IO) { ToolLayout.wireGuardApk(config) != null }
                     check(installed || apk) { tr("WireGuard is not installed; no local APK") }
                     if (installed) tr("WireGuard installed")
                     else tr("Local APK found; install when sending the profile")
@@ -999,20 +1013,22 @@ class AppState {
         }
     }
 
-    fun setupTools(component: String) =
+    fun setupTools(components: List<String>) =
         task(tr("Preparing tools")) {
             check(!capturing && !logging && fridaPid == null) {
                 tr("Stop capture, Logcat and the owned Frida server before preparing tools.")
             }
             fridaCheck = null
+            captureChecks = null
             setupLiveLog = ""
             setupProgress = SetupProgress(tr("Preparing tools"))
             val log = StringBuilder()
             try {
-                val config =
+                val previousSteps = toolSteps
+                val preparation =
                     ToolProvisioner.prepare(
                         settings,
-                        component,
+                        components,
                         { setupProgress = it },
                         { line ->
                             report(line)
@@ -1023,17 +1039,17 @@ class AppState {
                             }
                         },
                     )
-                updateSettings(config)
-                toolFindings = ToolInspector.inspect(config)
-                outputs +=
-                    OutputWindow(
-                        title = tr("Tool setup"),
-                        text =
-                            synchronized(log) { log.toString() } +
-                                "\n" +
-                                toolFindings.joinToString("\n\n") { it.summary },
-                    )
-                status = tr("Tools: operation completed")
+                val config = preparation.config
+                updateSettings(settings.copy(tools = config.tools, adb = config.adb, python = config.python))
+                toolPreparation = settings.toolConfiguration() to
+                    (previousSteps + preparation.steps.associateBy { it.component })
+                refreshToolStatus()
+                if (preparation.steps.any { it.component == "adb" && it.state == ToolStepState.Prepared })
+                    refreshDevices(true)
+                val unfinished = preparation.steps.count { it.state != ToolStepState.Prepared }
+                status =
+                    if (unfinished == 0) tr("Tools: operation completed")
+                    else tr("Setup finished with {0} unfinished components", unfinished)
             } catch (e: CancellationException) {
                 outputs +=
                     OutputWindow(

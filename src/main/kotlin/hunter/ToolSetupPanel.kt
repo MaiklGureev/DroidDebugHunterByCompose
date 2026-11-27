@@ -28,16 +28,34 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 @Composable
-fun ToolSetupPanel(model: AppState, draft: Settings, change: (Settings) -> Unit, enabled: Boolean) {
-    var component by remember { mutableStateOf("") }
+fun ToolSetupPanel(
+    model: AppState,
+    draft: Settings,
+    change: (Settings) -> Unit,
+    apply: () -> Unit,
+    components: List<String>,
+    enabled: Boolean,
+) {
+    val adbOnly = components == listOf("adb")
+    var component by remember(components) { mutableStateOf(components.singleOrNull() ?: "") }
     var editVersions by remember { mutableStateOf(false) }
     var sourcesVisible by remember { mutableStateOf(false) }
     val options = draft.setup
-    val hasComponent =
-        options.chosen && (options.mode == SetupMode.Automatic || component.isNotBlank())
-    val needsPython = options.mode == SetupMode.Automatic || component != "adb"
+    val validVersions = ToolPolicy.ids.all { ToolPolicy.validVersion(options.version(it)) }
+    val selectedComponents = when {
+        options.mode == SetupMode.Automatic && !adbOnly -> listOf("adb") + components
+        options.mode == SetupMode.Automatic || component == "connection" -> components
+        component.isNotBlank() -> listOf(component)
+        else -> emptyList()
+    }
+    val hasComponent = options.chosen && selectedComponents.isNotEmpty()
+    val needsPython = selectedComponents.any { it != "adb" && it != "wireguard" }
     val selectionReady =
         hasComponent && (options.mode == SetupMode.Manual || !needsPython || options.methodChosen)
+    val choices = if (adbOnly) components else listOf("connection") + components +
+        if ("capture" in components) listOf("frida") else emptyList()
+    val versionIds = components.flatMap(::toolFindingIds)
+        .map { if (it == "server" || it == "gadget") "frida" else it }.distinct()
     fun update(value: ToolSetupOptions) = change(draft.copy(setup = value))
     val uiScope = rememberCoroutineScope()
     fun selectFolder(current: String, selected: (String) -> Unit) {
@@ -50,6 +68,18 @@ fun ToolSetupPanel(model: AppState, draft: Settings, change: (Settings) -> Unit,
             selected(dialog.selectedFile.absolutePath)
     }
 
+    ToolPaths(model, draft, change, enabled, adbOnly, ::selectFolder)
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Action(tr("Save"), Icons.Outlined.Save, enabled && draft.tools.isNotBlank() && validVersions) {
+            apply()
+            model.status = tr("Settings saved")
+        }
+        Action(tr("Check"), Icons.Outlined.CheckCircleOutline, enabled && draft.tools.isNotBlank() && validVersions) {
+            apply()
+            model.checkTools(refreshAdb = adbOnly)
+        }
+    }
+    Divider(color = Line)
     Text(tr("Tool setup"), fontWeight = FontWeight.SemiBold)
     Text(
         tr(
@@ -71,7 +101,7 @@ fun ToolSetupPanel(model: AppState, draft: Settings, change: (Settings) -> Unit,
                     SetupMode.Guided ->
                         "Guided: choose one component and installation method, review the plan, then prepare it."
                     SetupMode.Automatic ->
-                        "Automatic: prepare all components locally and try alternative Python methods if needed."
+                        "Automatic: prepare the tools for this connection and try alternative Python methods if needed."
                 }
             ),
             options.chosen && options.mode == mode,
@@ -83,19 +113,21 @@ fun ToolSetupPanel(model: AppState, draft: Settings, change: (Settings) -> Unit,
 
     Text(tr("Target versions"), fontWeight = FontWeight.SemiBold)
     Text(
-        ToolPolicy.ids.joinToString(" · ") { "${ToolPolicy.names[it]} ${ToolPolicy.target(it)}" },
+        versionIds.joinToString(" · ") { "${ToolPolicy.names[it]} ${ToolPolicy.target(it)}" },
         fontSize = 12.sp,
     )
     Text(
         tr(
-            "Other versions are allowed with warnings. Frida client, server and Gadget must use the same version. Package requirements and native wheel availability still apply."
+            if ("capture" in components)
+                "Other versions are allowed with warnings. Frida client, server and Gadget must use the same version. Package requirements and native wheel availability still apply."
+            else "Other versions are allowed with warnings."
         ),
         color = Muted,
         fontSize = 12.sp,
     )
     Check(tr("Choose different versions"), editVersions, enabled) { editVersions = it }
     if (editVersions) {
-        for (ids in ToolPolicy.ids.chunked(2)) Row(
+        for (ids in versionIds.chunked(2)) Row(
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             for (id in ids) Column(Modifier.weight(1f)) {
@@ -119,19 +151,20 @@ fun ToolSetupPanel(model: AppState, draft: Settings, change: (Settings) -> Unit,
             if (ids.size == 1) Spacer(Modifier.weight(1f))
         }
         Action(tr("Restore target versions"), enabled = enabled) {
-            update(options.copy(versions = ToolPolicy.ids.associateWith(ToolPolicy::target)))
+            update(options.copy(versions = options.versions + versionIds.associateWith(ToolPolicy::target)))
         }
     }
 
     Text(tr("Components to download"), fontWeight = FontWeight.SemiBold)
-    if (options.chosen && options.mode == SetupMode.Automatic) Text(tr("All tools"), color = Accent)
+    if (options.chosen && options.mode == SetupMode.Automatic)
+        Text(selectedComponents.joinToString(" · ") { componentTitle(it) }, color = Accent)
     else
         FlowRow(
             Modifier.selectableGroup(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            for (id in ToolProvisioner.components) Surface(
+            for (id in choices) Surface(
                 shape = MaterialTheme.shapes.small,
                 border =
                     BorderStroke(
@@ -206,7 +239,7 @@ fun ToolSetupPanel(model: AppState, draft: Settings, change: (Settings) -> Unit,
                 selectFolder(options.cache) { update(options.copy(cache = it)) }
             }
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (adbOnly) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Field(
                 options.adbArchive,
                 { update(options.copy(adbArchive = it)) },
@@ -220,7 +253,7 @@ fun ToolSetupPanel(model: AppState, draft: Settings, change: (Settings) -> Unit,
                 }
             }
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (!adbOnly) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Field(
                 options.uv,
                 { update(options.copy(uv = it)) },
@@ -240,14 +273,13 @@ fun ToolSetupPanel(model: AppState, draft: Settings, change: (Settings) -> Unit,
         Action(
             tr("Download links / folders"),
             Icons.Outlined.Link,
-            enabled &&
-                hasComponent &&
-                ToolPolicy.ids.all { ToolPolicy.validVersion(options.version(it)) },
+            enabled && hasComponent && validVersions,
         ) {
             sourcesVisible = true
         }
-        Action(tr("Check / create folders"), Icons.Outlined.CreateNewFolder, enabled) {
-            model.updateSettings(draft)
+        Action(tr("Check / create folders"), Icons.Outlined.CreateNewFolder,
+            enabled && draft.tools.isNotBlank() && validVersions) {
+            apply()
             model.initializeToolFolders()
         }
         Action(tr("Folder structure"), Icons.Outlined.AccountTree, enabled) {
@@ -259,7 +291,7 @@ fun ToolSetupPanel(model: AppState, draft: Settings, change: (Settings) -> Unit,
         ToolSourcesDialog(
             model,
             draft,
-            if (options.mode == SetupMode.Automatic) "all" else component,
+            selectedComponents,
         ) {
             sourcesVisible = false
         }
@@ -284,20 +316,18 @@ fun ToolSetupPanel(model: AppState, draft: Settings, change: (Settings) -> Unit,
             model.outputs +=
                 OutputWindow(
                     title = tr("Setup plan"),
-                    text = ToolProvisioner.plan(draft, component),
+                    text = ToolProvisioner.plan(draft, selectedComponents),
                 )
         }
         if (options.chosen && options.mode != SetupMode.Manual)
             Action(
                 tr("Prepare selected tools"),
                 Icons.Outlined.Download,
-                enabled &&
-                    selectionReady &&
-                    ToolPolicy.ids.all { ToolPolicy.validVersion(options.version(it)) },
+                enabled && selectionReady && draft.tools.isNotBlank() && validVersions,
                 primary = true,
             ) {
-                model.updateSettings(draft)
-                model.setupTools(component)
+                apply()
+                model.setupTools(selectedComponents)
             }
         Action(tr("Use app data folder"), enabled = enabled) {
             change(
@@ -314,7 +344,13 @@ fun ToolSetupPanel(model: AppState, draft: Settings, change: (Settings) -> Unit,
                 "ADB" to "https://developer.android.com/tools/releases/platform-tools",
                 "Frida" to "https://github.com/frida/frida/releases",
                 "uv" to "https://docs.astral.sh/uv/getting-started/installation/",
-            )) {
+            ).filter { (label, _) ->
+                when (label) {
+                    "ADB" -> adbOnly
+                    "Frida" -> "capture" in components
+                    else -> !adbOnly
+                }
+            }) {
             Action(label, Icons.AutoMirrored.Outlined.OpenInNew) {
                 uiScope.launch {
                     try {
@@ -360,25 +396,45 @@ fun ToolSetupPanel(model: AppState, draft: Settings, change: (Settings) -> Unit,
             )
         }
     }
-    for (finding in model.toolFindings) Text(
-        finding.summary,
-        color = if (finding.warning) Amber else Green,
-        fontSize = 12.sp,
-    )
 }
 
-private fun componentTitle(id: String): String =
-    when (id) {
-        "all" -> tr("All tools")
-        "frida" -> tr("Frida bundle: client + server + Gadget")
-        "python" -> "Python"
-        "adb" -> "ADB"
-        "capture" -> "Frida Python"
-        "server" -> "frida-server"
-        "gadget" -> "Gadget"
-        "proxy" -> "mitmproxy Python"
-        else -> "WireGuard APK"
+@Composable
+private fun ToolPaths(
+    model: AppState,
+    draft: Settings,
+    change: (Settings) -> Unit,
+    enabled: Boolean,
+    adbOnly: Boolean,
+    selectFolder: (String, (String) -> Unit) -> Unit,
+) {
+    Text(tr("Platform: {0}", HostPlatform.current.label), color = Accent)
+    Text(tr("The local tool directory is shared across connection methods."), color = Muted, fontSize = 12.sp)
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Field(draft.tools, { change(draft.copy(tools = it)) }, tr("Tool bundle directory"),
+            Modifier.weight(1f), enabled)
+        Action(tr("Folder…"), enabled = enabled) {
+            selectFolder(draft.tools) { change(draft.copy(tools = it)) }
+        }
+        MiniIcon(Icons.Outlined.FolderOpen, tr("Open directory"), File(draft.tools).isDirectory) {
+            openFile(model, File(draft.tools))
+        }
     }
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Field(
+            if (adbOnly) draft.adb else draft.python,
+            { change(if (adbOnly) draft.copy(adb = it) else draft.copy(python = it)) },
+            tr(if (adbOnly) "ADB (empty = bundle / PATH)" else "Python executable (empty = auto)"),
+            Modifier.weight(1f),
+            enabled,
+        )
+        Action(tr("Select…"), enabled = enabled) {
+            val name = if (adbOnly) "adb" else HostPlatform.current.pythonName
+            chooseFile(title = HostPlatform.current.executable(name))?.let {
+                change(if (adbOnly) draft.copy(adb = it.absolutePath) else draft.copy(python = it.absolutePath))
+            }
+        }
+    }
+}
 
 @Composable
 private fun SetupOptionCard(

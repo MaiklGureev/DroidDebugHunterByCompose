@@ -2,6 +2,12 @@ package hunter
 
 import java.io.File
 import java.net.URI
+import java.nio.file.Files
+import java.util.zip.CRC32
+import java.util.zip.ZipFile
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.withContext
 
 data class ToolSource(
     val label: String,
@@ -78,6 +84,59 @@ object ToolLayout {
         )
     }
 
+    /** WireGuard is a standalone APK. Preparing it does not depend on Python or pip. */
+    fun wireGuardApk(config: Settings): File? =
+        File(config.tools, folder("wireguard")).listFiles()
+            ?.asSequence()
+            ?.filter { it.isFile && it.name.startsWith("com.wireguard.android-") && it.extension == "apk" }
+            ?.sortedByDescending { it.name == "com.wireguard.android-${config.setup.version("wireguard")}.apk" }
+            ?.firstOrNull {
+                runCatching {
+                    ZipFile(it).use { apk ->
+                        apk.getEntry("AndroidManifest.xml") != null && apk.getEntry("classes.dex") != null
+                    }
+                }.getOrDefault(false)
+            }
+
+    suspend fun prepareWireGuard(config: Settings, progress: (SetupProgress) -> Unit): Unit =
+        withContext(Dispatchers.IO) {
+            val source = sources(config, "wireguard").single()
+            val filename = URI(source.url).path.substringAfterLast('/')
+            val target = File(File(config.tools, source.folder), filename)
+            val cached = if (target.isFile) target else download(config, source, progress)
+            progress(SetupProgress(tr("Checking APK"), filename))
+            val context = coroutineContext
+            ZipFile(cached).use { apk ->
+                fun invalid(): Nothing = error(tr("Invalid WireGuard APK: {0}", cached.absolutePath))
+                if (apk.getEntry("AndroidManifest.xml") == null || apk.getEntry("classes.dex") == null)
+                    invalid()
+                val buffer = ByteArray(64 * 1024)
+                var totalBytes = 0L
+                for (entry in apk.entries().asSequence().filterNot { it.isDirectory }) {
+                    val crc = CRC32()
+                    apk.getInputStream(entry).use { stream ->
+                        while (true) {
+                            context.ensureActive()
+                            val count = stream.read(buffer)
+                            if (count < 0) break
+                            totalBytes += count
+                            if (totalBytes > 256L * 1024 * 1024) invalid()
+                            crc.update(buffer, 0, count)
+                        }
+                    }
+                    if (crc.value != entry.crc) invalid()
+                }
+            }
+            if (cached != target) {
+                ToolDownloads.staging(target.parentFile) { stage ->
+                    val staged = File(stage, filename)
+                    Files.copy(cached.toPath(), staged.toPath())
+                    context.ensureActive()
+                    Files.move(staged.toPath(), target.toPath())
+                }
+            }
+        }
+
     val folders =
         listOf(
             "platform-tools",
@@ -125,16 +184,13 @@ object ToolLayout {
             else -> ""
         }
 
-    fun sources(config: Settings, component: String): List<ToolSource> {
+    fun sources(config: Settings, component: String): List<ToolSource> =
+        sources(config, listOf(component))
+
+    fun sources(config: Settings, components: List<String>): List<ToolSource> {
         ToolPolicy.validate(config.setup.versions)
         val versions = config.setup
-        val selected =
-            when (component) {
-                "all" ->
-                    listOf("python", "adb", "capture", "server", "gadget", "proxy", "wireguard")
-                "frida" -> listOf("capture", "server", "gadget")
-                else -> listOf(component)
-            }
+        val selected = ToolProvisioner.expand(components)
         val result = mutableListOf<ToolSource>()
         for (id in selected) {
             when (id) {
@@ -200,7 +256,7 @@ object ToolLayout {
                             "uv ${ToolPolicy.target("uv")} · ${HostPlatform.current.label}",
                             "https://github.com/astral-sh/uv/releases/download/${ToolPolicy.target("uv")}/$asset",
                             "downloads/uv",
-                            "Save the original archive in the uv cache, or extract uv and select its executable in Settings.",
+                            "Save the original archive in the uv cache, or extract uv and select its executable on Connection.",
                         )
                 }
                 "wireguard" -> {

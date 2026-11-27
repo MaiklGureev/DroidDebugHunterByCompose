@@ -19,6 +19,7 @@ fun FridaConnectionPanel(
     model: AppState,
     enabled: Boolean,
     selectDevice: () -> Unit,
+    configureTools: () -> Unit,
 ) {
     val diagnosis = model.fridaDiagnosis()
     val next = diagnosis?.next
@@ -33,7 +34,7 @@ fun FridaConnectionPanel(
             ) {
                 when (next) {
                     FridaNext.Device -> selectDevice()
-                    FridaNext.Tools -> model.page = Page.Settings
+                    FridaNext.Tools -> configureTools()
                     FridaNext.App -> {
                         model.page = Page.Traffic
                         if (model.apps.isEmpty()) model.loadApps()

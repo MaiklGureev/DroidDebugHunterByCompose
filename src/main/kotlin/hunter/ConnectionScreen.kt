@@ -1,10 +1,15 @@
-@file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@file:OptIn(
+    androidx.compose.foundation.layout.ExperimentalLayoutApi::class,
+    androidx.compose.foundation.ExperimentalFoundationApi::class,
+)
 
 package hunter
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.VerticalScrollbar
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.rememberScrollbarAdapter
 import androidx.compose.foundation.selection.selectable
@@ -17,10 +22,10 @@ import androidx.compose.material.Text
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.HelpOutline
 import androidx.compose.material.icons.outlined.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -33,6 +38,13 @@ fun ConnectionScreen(model: AppState) {
     val connected = model.selectedDevice?.state == "device"
     val scroll = rememberScrollState()
     val scope = rememberCoroutineScope()
+    var expandedTools by remember { mutableStateOf("") }
+    val captureTools = remember { BringIntoViewRequester() }
+    LaunchedEffect(model.initialized, model.settings.toolConfiguration(), model.busy.isEmpty()) {
+        if (model.initialized && model.busy.isEmpty() && model.toolFindings.isEmpty()) {
+            model.refreshToolStatus()
+        }
+    }
 
     Box(Modifier.fillMaxSize()) {
         Column(
@@ -40,6 +52,10 @@ fun ConnectionScreen(model: AppState) {
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             AndroidConnectionWizard(model, idle)
+            ConnectionToolsPanel(
+                model, tr("ADB software"), listOf("adb"), expandedTools == "adb",
+                onExpand = { expandedTools = if (expandedTools == "adb") "" else "adb" },
+            )
             Panel(tr("Capture method"), modifier = Modifier.fillMaxWidth()) {
                 FlowRow(
                     Modifier.fillMaxWidth().selectableGroup(),
@@ -73,6 +89,12 @@ fun ConnectionScreen(model: AppState) {
                 }
                 Text(model.mode.hint, color = Muted)
             }
+            ConnectionToolsPanel(
+                model, tr("Capture software"), model.mode.toolComponents(model.settings.gadget),
+                expandedTools == "capture",
+                onExpand = { expandedTools = if (expandedTools == "capture") "" else "capture" },
+                modifier = Modifier.bringIntoViewRequester(captureTools),
+            )
 
             if (model.mode.isFrida) {
                 Panel(
@@ -86,7 +108,15 @@ fun ConnectionScreen(model: AppState) {
                     Check(tr("Launch app at startup"), model.settings.spawn, editable) {
                         model.updateSettings(model.settings.copy(spawn = it))
                     }
-                    FridaConnectionPanel(model, editable) { scope.launch { scroll.animateScrollTo(0) } }
+                    FridaConnectionPanel(
+                        model,
+                        editable,
+                        selectDevice = { scope.launch { scroll.animateScrollTo(0) } },
+                        configureTools = {
+                            expandedTools = "capture"
+                            scope.launch { captureTools.bringIntoView(Rect(0f, 0f, 1f, 32f)) }
+                        },
+                    )
                 }
             } else {
                 Panel(tr("HTTPS certificate"), modifier = Modifier.fillMaxWidth()) {

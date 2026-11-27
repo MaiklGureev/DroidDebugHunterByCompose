@@ -2,7 +2,51 @@ package hunter
 
 import com.google.gson.JsonObject
 import java.io.File
-import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.*
+
+fun CaptureMode.toolComponents(gadget: Boolean): List<String> =
+    when (this) {
+        CaptureMode.Proxy -> listOf("python", "proxy")
+        CaptureMode.Vpn -> listOf("python", "proxy", "wireguard")
+        CaptureMode.OkHttp, CaptureMode.Native -> listOf("python", "capture", if (gadget) "gadget" else "server")
+    }
+
+fun toolFindingIds(component: String): List<String> =
+    when (component) {
+        "capture" -> listOf("frida", "fridaTools")
+        "proxy" -> listOf("mitmproxy", "mitmproxyRs")
+        else -> listOf(component)
+    }
+
+fun componentTitle(id: String): String =
+    when (id) {
+        "connection" -> tr("Tools for this method")
+        "all" -> tr("All tools")
+        "frida" -> tr("Frida bundle: client + server + Gadget")
+        "python" -> "Python"
+        "adb" -> "ADB"
+        "capture" -> "Frida Python"
+        "server" -> "frida-server"
+        "gadget" -> "Gadget"
+        "proxy" -> "mitmproxy Python"
+        "wireguard" -> "WireGuard APK"
+        else -> id
+    }
+
+enum class ToolStepState { Prepared, Failed, Skipped }
+
+data class ToolStep(val component: String, val state: ToolStepState, val detail: String = "")
+
+data class ToolPreparation(val config: Settings, val steps: List<ToolStep>)
+
+data class ToolConfiguration(
+    val directory: String,
+    val adb: String,
+    val python: String,
+    val versions: Map<String, String>,
+)
+
+fun Settings.toolConfiguration() = ToolConfiguration(tools, adb, python, setup.versions)
 
 enum class SetupMode(val key: String) {
     Manual("Manual setup"),
@@ -84,14 +128,22 @@ data class ToolFinding(
     val failed: Boolean = false,
 ) {
     val title
-        get() = ToolPolicy.names[id] ?: id
+        get() = when (id) {
+            "server" -> "frida-server"
+            "gadget" -> "Gadget"
+            "wireguard" -> "WireGuard APK"
+            else -> ToolPolicy.names[id] ?: id
+        }
+
+    val versionId
+        get() = if (id == "server" || id == "gadget") "frida" else id
 
     val warning
-        get() = failed || actual.isNullOrBlank() || actual != ToolPolicy.target(id)
+        get() = failed || actual.isNullOrBlank() || actual != ToolPolicy.target(versionId)
 
     val summary
         get() =
-            "$title · ${actual ?: "—"} · ${tr("Target")}: ${ToolPolicy.target(id)}\n${ToolPolicy.notice(id, actual)}" +
+            "$title · ${actual ?: "—"} · ${tr("Target")}: ${ToolPolicy.target(versionId)}\n${ToolPolicy.notice(versionId, actual)}" +
                 if (detail.isBlank()) "" else "\n$detail"
 }
 
@@ -125,6 +177,9 @@ object ToolInspector {
             val result = Adb(config).run("version", timeout = 10000).requireSuccess()
             findings +=
                 ToolFinding("adb", ToolPolicy.adbVersion(result), config.adbCommand + "\n" + result)
+        } catch (_: TimeoutCancellationException) {
+            currentCoroutineContext().ensureActive()
+            findings += ToolFinding("adb", null, tr("The check timed out"), true)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -149,6 +204,9 @@ object ToolInspector {
                             )
                             .requireSuccess()
                     )
+                } catch (_: TimeoutCancellationException) {
+                    currentCoroutineContext().ensureActive()
+                    JsonObject()
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
@@ -182,7 +240,7 @@ object ToolInspector {
             for (id in listOf("frida", "fridaTools", "mitmproxy", "mitmproxyRs")) {
                 val module =
                     (if (id in listOf("mitmproxy", "mitmproxyRs")) proxyInfo else info)
-                        .getAsJsonObject(id)
+                        .obj(id)
                 findings +=
                     ToolFinding(
                         id,
@@ -191,6 +249,9 @@ object ToolInspector {
                         module.has("error"),
                     )
             }
+        } catch (_: TimeoutCancellationException) {
+            currentCoroutineContext().ensureActive()
+            findings += ToolFinding("python", null, tr("The check timed out"), true)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -198,16 +259,29 @@ object ToolInspector {
             for (id in listOf("frida", "fridaTools", "mitmproxy", "mitmproxyRs")) findings +=
                 ToolFinding(id, null)
         }
-        val apk =
-            File(config.tools, "android-tools").listFiles()?.firstOrNull {
-                it.name.startsWith("com.wireguard.android-") && it.extension == "apk"
-            }
+        val apk = withContext(Dispatchers.IO) { ToolLayout.wireGuardApk(config) }
         findings +=
             ToolFinding(
                 "wireguard",
                 apk?.name?.removePrefix("com.wireguard.android-")?.removeSuffix(".apk"),
-                tr("Optional: VPN mode only; Android installation and VPN consent are separate."),
+                apk?.absolutePath ?: tr("Optional: VPN mode only; Android installation and VPN consent are separate."),
             )
+        val fridaVersion = findings.firstOrNull { it.id == "frida" }?.actual ?: config.setup.version("frida")
+        withContext(Dispatchers.IO) {
+            for (id in listOf("server", "gadget")) {
+                val suffix = if (id == "gadget") ".so" else ""
+                val folder = File(config.tools, ToolLayout.folder(id))
+                val abis = listOf("arm64", "arm", "x86_64", "x86").filter { abi ->
+                    val file = File(folder, "frida-$id-$fridaVersion-android-$abi$suffix")
+                    runCatching { Adb.validateElf(file, abi) }.isSuccess
+                }
+                findings += ToolFinding(
+                    id,
+                    fridaVersion.takeIf { abis.isNotEmpty() },
+                    if (abis.isNotEmpty()) "${abis.joinToString()} · ${folder.absolutePath}" else folder.absolutePath,
+                )
+            }
+        }
         return findings
     }
 
