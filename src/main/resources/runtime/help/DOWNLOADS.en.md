@@ -2,7 +2,7 @@
 
 **English** | [Русский](DOWNLOADS.md)
 
-HAR analysis needs no external tools. Java is included in native packages. ADB is needed for devices; Python and mode-specific packages are needed for capture. Check the tools you want and click **Prepare selected**. Normal startup downloads nothing.
+HAR analysis needs no external tools. Java is included in native packages. ADB is needed for devices; Python and mode-specific packages are needed for capture. Use **Download and prepare** for ADB or check capture components and click **Prepare selected**. Normal startup downloads nothing.
 
 ## Target versions and alternatives
 
@@ -23,12 +23,12 @@ The reference configuration is recorded in `tool-setup/tool-versions.json` (revi
 
 ## Configure and download tools
 
-On **Connection**, each tool shows its status, versions, bundle folder and local options. ADB is shared across USB, Wi-Fi and Emulator. Choose the Python executable and method in the Python section. The shared tool directory and download cache are always visible.
+On **Connection**, each tool shows its status, versions, bundle folder and local options. ADB is shared across USB, Wi-Fi and Emulator. Use **Change download version** to select a different ADB release. Choose the Python executable and method in the Python section. The shared tool directory and download cache are always visible.
 
 - **Manual download:** open the component's sources, copy links and follow the placement instructions. Use **Check tools** after placing files or saving an executable path.
-- **Download and prepare:** let the app download and prepare this component in the selected folder. To prepare a batch, check the desired tools and click **Prepare selected**. Selecting a component or opening its links does not start a download.
+- **Download and prepare:** let the app download and prepare this component in the selected folder. To prepare a batch, check the desired capture tools and click **Prepare selected**. Selecting a component or opening its links does not start a download.
 
-If a component fails, independent steps continue. For example, WireGuard can be prepared even when Python is unavailable. Steps with missing prerequisites are marked **Skipped**. To retry, use **Select unfinished**, then **Prepare selected**.
+If a component fails, independent steps continue. For example, WireGuard can be prepared even when Python is unavailable. Steps with missing prerequisites are marked **Skipped**. To retry ADB, use its own download button. For capture tools, use **Select unfinished**, then **Prepare selected**.
 
 Installation methods, versions, offline/cache settings and executable paths are saved per OS/CPU profile.
 

@@ -18,6 +18,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.*
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.unit.dp
@@ -71,7 +74,11 @@ fun ToolComponentOptions(component: String, draft: Settings, change: (Settings) 
     val options = draft.setup
     fun update(value: ToolSetupOptions) = change(draft.copy(setup = value))
     val ids = toolFindingIds(component).map { if (it in listOf("server", "gadget")) "frida" else it }
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    if (component == "adb") {
+        AdbDownloadVersion(options.version("adb"), enabled) {
+            update(options.copy(versions = options.versions + ("adb" to it)))
+        }
+    } else Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         for (id in ids) {
             OutlinedTextField(
                 options.version(id),
@@ -125,6 +132,50 @@ fun ToolComponentOptions(component: String, draft: Settings, change: (Settings) 
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun AdbDownloadVersion(version: String, enabled: Boolean, onChange: (String) -> Unit) {
+    var editing by remember { mutableStateOf(false) }
+    TextButton(onClick = { editing = true }, enabled = enabled) {
+        Text(tr("Change download version"))
+    }
+    if (editing) {
+        var input by remember(version) { mutableStateOf(version) }
+        val focus = remember { FocusRequester() }
+        val valid = ToolPolicy.validVersion(input)
+        val save = {
+            onChange(input)
+            editing = false
+        }
+        AlertDialog(
+            onDismissRequest = { editing = false },
+            title = { Text(tr("Change download version")) },
+            text = {
+                OutlinedTextField(
+                    input,
+                    { input = it.trim() },
+                    Modifier.fillMaxWidth().focusRequester(focus).onPreviewKeyEvent { event ->
+                        if (event.type == KeyEventType.KeyDown &&
+                            (event.key == Key.Enter || event.key == Key.NumPadEnter)
+                        ) {
+                            if (valid) save()
+                            true
+                        } else false
+                    },
+                    label = { Text(tr("{0} version", ToolPolicy.names.getValue("adb"))) },
+                    supportingText = {
+                        Text(if (valid) tr("Target: {0}", ToolPolicy.target("adb")) else tr("Enter a numeric version"))
+                    },
+                    isError = !valid,
+                    singleLine = true,
+                )
+                LaunchedEffect(Unit) { focus.requestFocus() }
+            },
+            confirmButton = { TextButton(onClick = save, enabled = valid) { Text(tr("Apply")) } },
+            dismissButton = { TextButton(onClick = { editing = false }) { Text(tr("Cancel")) } },
+        )
     }
 }
 

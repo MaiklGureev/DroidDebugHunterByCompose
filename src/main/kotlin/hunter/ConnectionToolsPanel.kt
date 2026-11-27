@@ -36,17 +36,18 @@ fun ConnectionToolsPanel(
     modifier: Modifier = Modifier,
 ) {
     val config = model.settings
-    val required = listOf("adb") + captureComponents
+    val required = captureComponents
     val optional = when {
         "server" in required -> listOf("gadget")
         "gadget" in required -> listOf("server")
         else -> emptyList()
     }
-    val components = required + optional
+    val batchComponents = required + optional
+    val components = listOf("adb") + batchComponents
     var selection by remember(required) { mutableStateOf(emptySet<String>()) }
-    val selected = components.filter { it in selection }
+    val selected = batchComponents.filter { it in selection }
     val findings = model.toolFindings.associateBy { it.id }
-    val unfinished = components.filter {
+    val unfinished = batchComponents.filter {
         model.toolSteps[it]?.state?.let { state -> state != ToolStepState.Prepared } == true
     }
     var sources by remember(required) { mutableStateOf(emptyList<String>()) }
@@ -124,7 +125,9 @@ fun ConnectionToolsPanel(
                 ToolListRow(
                     id, detected, step, findings.isNotEmpty(), draft.setup,
                     id in selection, id in optional, editable,
-                    onChecked = { selection = if (it) selection + id else selection - id },
+                    onChecked = if (id == "adb") null else { checked ->
+                        selection = if (checked) selection + id else selection - id
+                    },
                 ) {
                     val details = detected.joinToString("\n\n") { it.summary }
                     val text = if (step == null) details else "$details\n\n${step.detail}"
@@ -199,7 +202,7 @@ private fun ToolListRow(
     checked: Boolean,
     optional: Boolean,
     enabled: Boolean,
-    onChecked: (Boolean) -> Unit,
+    onChecked: ((Boolean) -> Unit)?,
     onDetails: () -> Unit,
 ) {
     val scheme = MaterialTheme.colorScheme
@@ -210,30 +213,43 @@ private fun ToolListRow(
         detected.any { it.warning } -> Triple(tr("Different version"), scheme.tertiaryContainer, scheme.onTertiaryContainer)
         else -> Triple(tr("Ready"), scheme.secondaryContainer, scheme.onSecondaryContainer)
     }
-    val interaction = remember { MutableInteractionSource() }
-    val hovered by interaction.collectIsHoveredAsState()
     Row(
         Modifier.fillMaxWidth().heightIn(min = 48.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Row(
-            Modifier.weight(1f).heightIn(min = 48.dp)
-                .background(if (hovered) scheme.surfaceVariant else Color.Transparent, MaterialTheme.shapes.small)
+        val row = Modifier.weight(1f).heightIn(min = 48.dp)
+        val rowModifier = if (onChecked == null) row else {
+            val interaction = remember { MutableInteractionSource() }
+            val hovered by interaction.collectIsHoveredAsState()
+            row.background(if (hovered) scheme.surfaceVariant else Color.Transparent, MaterialTheme.shapes.small)
                 .hoverable(interaction, enabled)
                 .pointerHoverIcon(if (enabled) PointerIcon.Hand else PointerIcon.Default)
-                .toggleable(checked, enabled = enabled, role = Role.Checkbox, onValueChange = onChecked),
+                .toggleable(checked, enabled = enabled, role = Role.Checkbox, onValueChange = onChecked)
+        }
+        Row(
+            rowModifier,
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Checkbox(checked, onCheckedChange = null, enabled = enabled)
+            if (onChecked != null) Checkbox(checked, onCheckedChange = null, enabled = enabled)
             Column(Modifier.weight(1f).padding(vertical = 6.dp)) {
                 val title = componentTitle(id)
                 Text(if (optional) tr("{0} (optional)", title) else title, style = MaterialTheme.typography.bodyMedium)
-                Text(detected.joinToString(" · ") { finding ->
-                    val version = "${finding.actual ?: "—"} / ${options.version(finding.versionId)}"
-                    if (detected.size > 1) "${finding.title} $version" else tr("Detected / selected: {0}", version)
-                }, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(
+                    if (id == "adb") tr(
+                        "Detected: {0} · Download version: {1}",
+                        detected.firstOrNull()?.actual ?: "—",
+                        options.version("adb"),
+                    ) else detected.joinToString(" · ") { finding ->
+                        val version = "${finding.actual ?: "—"} / ${options.version(finding.versionId)}"
+                        if (detected.size > 1) "${finding.title} $version" else tr("Detected / selected: {0}", version)
+                    },
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodySmall,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
                 if (step != null) {
                     val reason = step.detail.lineSequence().lastOrNull { it.isNotBlank() }.orEmpty()
                     val label = tr(if (step.state == ToolStepState.Skipped) "Skipped" else "Failed")
@@ -265,7 +281,7 @@ private fun ToolListPreview(dark: Boolean) {
                 val options = ToolSetupOptions()
                 ToolListRow(
                     "adb", listOf(ToolFinding("adb", options.version("adb"))), null,
-                    true, options, true, false, true, {}, {},
+                    true, options, false, false, true, null, {},
                 )
                 ToolListRow(
                     "python", listOf(ToolFinding("python", null)),

@@ -694,5 +694,7 @@
   "Choose a tool directory first.": "Сначала выберите папку инструментов.",
   "Bootstrap helper target: uv {0}": "Целевой помощник установки: uv {0}",
   "uv target {0}; found {1}. Continuing with the selected executable.": "Целевая uv — {0}; найдена {1}. Продолжаем с выбранным исполняемым файлом.",
-  "The component directory links to another location. Choose another tools folder or configure its executable path.": "Папка компонента ссылается на другой каталог. Выберите другую папку инструментов или укажите путь к исполняемому файлу."
+  "The component directory links to another location. Choose another tools folder or configure its executable path.": "Папка компонента ссылается на другой каталог. Выберите другую папку инструментов или укажите путь к исполняемому файлу.",
+  "Change download version": "Изменить версию для скачивания",
+  "Detected: {0} · Download version: {1}": "Обнаружено: {0} · Версия для скачивания: {1}"
 }

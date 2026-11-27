@@ -694,5 +694,7 @@
   "Choose a tool directory first.": "Choose a tool directory first.",
   "Bootstrap helper target: uv {0}": "Bootstrap helper target: uv {0}",
   "uv target {0}; found {1}. Continuing with the selected executable.": "uv target {0}; found {1}. Continuing with the selected executable.",
-  "The component directory links to another location. Choose another tools folder or configure its executable path.": "The component directory links to another location. Choose another tools folder or configure its executable path."
+  "The component directory links to another location. Choose another tools folder or configure its executable path.": "The component directory links to another location. Choose another tools folder or configure its executable path.",
+  "Change download version": "Change download version",
+  "Detected: {0} · Download version: {1}": "Detected: {0} · Download version: {1}"
 }
