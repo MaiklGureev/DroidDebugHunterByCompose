@@ -69,8 +69,21 @@ class HelpViewModel internal constructor(
             showError(tr("Select a Markdown file (.md or .markdown)"))
             return
         }
-        val absolute = file.absoluteFile
-        openDocument(Entry.Document(MarkdownLocation(absolute, absolute.parentFile), bundled = false), reload = true)
+        val origin = ++navigation
+        scope.launch {
+            try {
+                val location = withContext(ioDispatcher) {
+                    val absolute = file.absoluteFile
+                    MarkdownLocation(absolute.canonicalFile, absolute.parentFile.canonicalFile)
+                }
+                if (origin == navigation) openDocument(Entry.Document(location, bundled = false), reload = true)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                logHandledFailure("help", "Could not open Markdown", e)
+                if (origin == navigation) showError(e.message ?: tr("Guide unavailable"))
+            }
+        }
     }
 
     fun back() {

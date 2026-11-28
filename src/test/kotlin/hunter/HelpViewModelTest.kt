@@ -24,7 +24,7 @@ class HelpViewModelTest {
     @Test
     fun `manual Markdown supports local links anchors web links and back`(@TempDir directory: Path) = runTest {
         val root = directory.toFile()
-        val first = root.document("notes/first.markdown", "# First\n\n[Next](second.md#details)")
+        val first = root.document("notes/./first.markdown", "# First\n\n[Next](second.md#details)")
         val second = root.document("notes/second.md", "# Second\n\n## Details\n\n## End")
         val outside = root.document("outside.md", "# Outside")
         val opened = mutableListOf<URI>()
