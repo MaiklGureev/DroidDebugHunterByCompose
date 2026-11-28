@@ -16,13 +16,14 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import hunter.app.AppState
 import hunter.core.tr
 import hunter.features.android.Adb
 import hunter.features.android.AndroidConnection
 import hunter.features.android.Device
 import hunter.features.android.ui.AdbDeviceRows
 import hunter.features.android.ui.icon
+import hunter.features.connection.ConnectionUiState
+import hunter.features.connection.ConnectionViewModel
 import hunter.ui.Accent
 import hunter.ui.Action
 import hunter.ui.Amber
@@ -33,10 +34,10 @@ import hunter.ui.Muted
 import hunter.ui.Panel
 
 @Composable
-fun AndroidConnectionWizard(model: AppState, enabled: Boolean) {
-    var method by remember { mutableStateOf(model.selectedDevice?.connection ?: AndroidConnection.Usb) }
-    val devices = model.devices.filter { it.connection == method }
-    val selected = model.selectedDevice
+fun AndroidConnectionWizard(connection: ConnectionViewModel, state: ConnectionUiState, enabled: Boolean) {
+    var method by remember { mutableStateOf(state.selectedDevice?.connection ?: AndroidConnection.Usb) }
+    val devices = state.devices.filter { it.connection == method }
+    val selected = state.selectedDevice
     Panel(
         tr("Connect Android"),
         selected?.let { tr("Selected: {0}", it.label) } ?: "",
@@ -49,7 +50,7 @@ fun AndroidConnectionWizard(model: AppState, enabled: Boolean) {
         ) {
             for (item in AndroidConnection.entries) {
                 val selected = item == method
-                val connected = model.devices.count { it.connection == item && it.state == "device" }
+                val connected = state.devices.count { it.connection == item && it.state == "device" }
                 Surface(
                     modifier = Modifier.width(190.dp)
                         .selectable(selected, enabled, role = Role.RadioButton) { method = item },
@@ -75,7 +76,7 @@ fun AndroidConnectionWizard(model: AppState, enabled: Boolean) {
         when (method) {
             AndroidConnection.Usb -> {
                 Text(tr("Enable USB debugging, connect Android and confirm the computer's RSA key on the phone."))
-                if (model.devices.any { it.connection == method && it.state == "unauthorized" }) {
+                if (state.devices.any { it.connection == method && it.state == "unauthorized" }) {
                     Text(tr("Confirm RSA on the phone"), color = Amber)
                 }
             }
@@ -83,27 +84,25 @@ fun AndroidConnectionWizard(model: AppState, enabled: Boolean) {
                 Text(tr("Start an Android Virtual Device in Android Studio Device Manager. Wait for Android to finish booting, then refresh the list."))
                 Text(tr("Emulators with a network address can also be connected from the Wi-Fi card."), color = Muted)
             }
-            AndroidConnection.Wifi -> WirelessConnection(model, enabled)
+            AndroidConnection.Wifi -> WirelessConnection(connection, state.wirelessAddresses, enabled)
         }
         FlowRow(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            Action(tr("Refresh"), Icons.Outlined.Refresh, enabled && !model.refreshing) {
-                model.task(tr("Refreshing devices")) { model.refreshDevices(true) }
-            }
+            Action(tr("Refresh"), Icons.Outlined.Refresh, enabled && !state.refreshing, onClick = connection::refresh)
             if (method == AndroidConnection.Wifi && selected?.connection == method) {
                 Action(tr("Disconnect Wi-Fi ADB"), enabled = enabled && selected.state == "device",
-                    onClick = model::disconnect)
+                    onClick = connection::disconnect)
             }
         }
         if (devices.isEmpty()) Text(tr("No devices for this connection method"), color = Muted)
-        else AdbDeviceRows(model, devices, enabled)
+        else AdbDeviceRows(devices, selected?.serial, enabled, connection::selectDevice)
     }
 }
 
 @Composable
-private fun WirelessConnection(model: AppState, enabled: Boolean) {
+private fun WirelessConnection(connection: ConnectionViewModel, addresses: List<String>, enabled: Boolean) {
     var pairAddress by remember { mutableStateOf("") }
     var code by remember { mutableStateOf("") }
     var address by remember { mutableStateOf("") }
@@ -131,7 +130,7 @@ private fun WirelessConnection(model: AppState, enabled: Boolean) {
             enabled = enabled && Adb.validAddress(pairAddress.trim()) && code.matches(Regex("[0-9]{6}")),
         ) {
             paired = false
-            model.connect(pairAddress, code) {
+            connection.connect(pairAddress, code) {
                 code = ""
                 paired = true
             }
@@ -143,13 +142,13 @@ private fun WirelessConnection(model: AppState, enabled: Boolean) {
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Field(address, { address = it }, tr("Connection address IP:port"), Modifier.width(240.dp), enabled)
         Action(tr("Connect"), enabled = enabled && Adb.validAddress(address.trim()), primary = true) {
-            model.connect(address)
+            connection.connect(address)
         }
-        Action(tr("Find Wi-Fi devices"), Icons.Outlined.Search, enabled, onClick = model::discoverWireless)
+        Action(tr("Find Wi-Fi devices"), Icons.Outlined.Search, enabled, onClick = connection::discoverWireless)
     }
-    if (model.wirelessAddresses.isNotEmpty()) {
+    if (addresses.isNotEmpty()) {
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            for (endpoint in model.wirelessAddresses) {
+            for (endpoint in addresses) {
                 Action(endpoint, enabled = enabled) { address = endpoint }
             }
         }

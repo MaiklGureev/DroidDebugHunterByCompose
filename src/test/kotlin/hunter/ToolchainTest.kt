@@ -15,6 +15,8 @@ import hunter.features.tools.ToolSetupOptions
 import hunter.features.tools.ToolStepState
 import java.io.File
 import java.net.InetSocketAddress
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import java.nio.file.Path
 import java.util.zip.GZIPOutputStream
 import java.util.zip.ZipEntry
@@ -24,6 +26,142 @@ import kotlinx.coroutines.*
 import org.junit.jupiter.api.io.TempDir
 
 class ToolchainTest {
+    @Test
+    fun `latest Platform Tools uses the official stable URL for each host`() {
+        val pinned = ToolSetupOptions()
+        val latest = pinned.copy(versions = pinned.versions + ("adb" to ToolPolicy.ADB_LATEST))
+        ToolPolicy.validate(latest.versions)
+        assertFalse(ToolPolicy.validDownloadVersion("python", ToolPolicy.ADB_LATEST))
+        for ((os, suffix) in mapOf(HostOs.Windows to "windows", HostOs.MacOS to "darwin", HostOs.Linux to "linux")) {
+            val platform = HostPlatform(os, "x64")
+            assertEquals("https://dl.google.com/android/repository/platform-tools-latest-$suffix.zip",
+                ToolLayout.adbSource(latest, platform).url)
+            val versionedSuffix = if (os == HostOs.Windows) "win" else suffix
+            assertTrue(ToolLayout.adbSource(pinned, platform).url.endsWith("-$versionedSuffix.zip"))
+            assertNull(ToolLayout.adbChecksum(latest, platform))
+            assertNotNull(ToolLayout.adbChecksum(pinned, platform))
+        }
+    }
+
+    @Test
+    fun `debug tool sources match macOS and Linux CPU`() {
+        val config = Settings()
+        val hosts = mapOf(
+            HostPlatform(HostOs.MacOS, "x64") to "x86_64-apple-darwin",
+            HostPlatform(HostOs.MacOS, "arm64") to "aarch64-apple-darwin",
+            HostPlatform(HostOs.Linux, "x64") to "x86_64-unknown-linux-gnu",
+            HostPlatform(HostOs.Linux, "arm64") to "aarch64-unknown-linux-gnu",
+        )
+        for ((platform, uvTarget) in hosts) {
+            val pythonSources = ToolLayout.sources(config, listOf("python"), platform)
+            assertEquals("uv-$uvTarget.tar.gz", pythonSources.single(ToolLayout::isArchive).url.substringAfterLast('/'))
+        }
+        val macIntel = HostPlatform(HostOs.MacOS, "x64")
+        val macArm = HostPlatform(HostOs.MacOS, "arm64")
+        assertEquals(ToolLayout.adbSource(config.setup, macIntel).url, ToolLayout.adbSource(config.setup, macArm).url)
+        val linuxArm = HostPlatform(HostOs.Linux, "arm64")
+        assertFailsWith<IllegalArgumentException> { ToolLayout.adbSource(config.setup, linuxArm) }
+        val linuxArmSource = ToolLayout.sources(config, listOf("adb"), linuxArm).single()
+        assertFalse(ToolLayout.isArchive(linuxArmSource))
+        assertTrue(linuxArmSource.url.endsWith("/arm64/adb"))
+        assertEquals(ToolLayout.sources(config, listOf("server", "gadget"), macIntel),
+            ToolLayout.sources(config, listOf("server", "gadget"), linuxArm))
+    }
+
+    @Test
+    fun `ADB headers distinguish native ELF and thin or universal Mach-O`() {
+        for (os in listOf(HostOs.MacOS, HostOs.Linux)) {
+            val intel = HostPlatform(os, "x64")
+            val arm = HostPlatform(os, "arm64")
+            assertTrue(ToolDownloads.adbBinaryMatches(adbHeader(intel), intel))
+            assertTrue(ToolDownloads.adbBinaryMatches(adbHeader(arm), arm))
+            assertFalse(ToolDownloads.adbBinaryMatches(adbHeader(intel), arm))
+            assertFalse(ToolDownloads.adbBinaryMatches(adbHeader(arm), intel))
+        }
+        val fat = ByteBuffer.allocate(48).putInt(0xcafebabeu.toInt()).putInt(2)
+            .putInt(8, 0x01000007).putInt(28, 0x0100000c).array()
+        for (arch in listOf("x64", "arm64")) {
+            val mac = HostPlatform(HostOs.MacOS, arch)
+            assertTrue(ToolDownloads.adbBinaryMatches(fat, mac))
+            assertFalse(ToolDownloads.adbBinaryMatches(fat.copyOf(28), mac))
+        }
+    }
+
+    private fun adbHeader(platform: HostPlatform): ByteArray {
+        val header = ByteBuffer.allocate(20)
+        when (platform.os) {
+            HostOs.Windows -> header.putShort(0x4d5a)
+            HostOs.Linux -> header.putInt(0x7f454c46).put(2).put(1).order(ByteOrder.LITTLE_ENDIAN)
+                .putShort(18, if (platform.arch == "arm64") 183 else 62)
+            HostOs.MacOS -> header.order(ByteOrder.LITTLE_ENDIAN).putInt(0xfeedfacfu.toInt())
+                .putInt(if (platform.arch == "arm64") 0x0100000c else 0x01000007)
+        }
+        return header.array()
+    }
+
+    @Test
+    fun `latest Platform Tools accepts the ZIP revision from the offline cache`(@TempDir dir: Path) =
+        runBlocking {
+            val root = dir.toFile()
+            val platform = HostPlatform.current
+            var options = ToolSetupOptions(offline = true).let {
+                it.copy(versions = it.versions + ("adb" to ToolPolicy.ADB_LATEST))
+            }
+            val nativeZip = !ToolLayout.hasGoogleAdbArchive(platform)
+            val name = if (nativeZip) "native.zip" else ToolLayout.adbSource(options, platform).url.substringAfterLast('/')
+            val archive = File(root, "downloads/adb/$name").apply {
+                parentFile.mkdirs()
+            }
+            val executable = platform.executable("adb")
+            val header = adbHeader(platform)
+            val entries = mutableMapOf(
+                executable to header,
+                "NOTICE.txt" to "fixture".toByteArray(),
+                "source.properties" to "Pkg.Revision=38.0.0\n".toByteArray(),
+            )
+            if (platform.os == HostOs.Windows) {
+                entries["AdbWinApi.dll"] = byteArrayOf(1)
+                entries["AdbWinUsbApi.dll"] = byteArrayOf(1)
+            }
+            ZipOutputStream(archive.outputStream()).use { zip ->
+                for ((name, bytes) in entries) {
+                    zip.putNextEntry(ZipEntry("platform-tools/$name"))
+                    zip.write(bytes)
+                    zip.closeEntry()
+                }
+            }
+            if (nativeZip) options = options.copy(adbArchive = archive.path)
+            val config = Settings(tools = root.path, setup = options)
+            val installed = File(ToolDownloads.installAdb(config) {})
+            assertEquals(File(root, "platform-tools/$executable"), installed)
+            assertEquals("Pkg.Revision=38.0.0\n", File(installed.parentFile, "source.properties").readText())
+            val pinned = config.copy(setup = ToolSetupOptions(offline = true, adbArchive = archive.path))
+            assertFailsWith<IllegalArgumentException> { ToolDownloads.installAdb(pinned) {} }
+            assertContentEquals(header, installed.readBytes())
+        }
+
+    @Test
+    fun `a latest download refreshes the cache when online and uses it offline`(@TempDir dir: Path) =
+        runBlocking {
+            val destination = dir.resolve("platform-tools-latest.zip").toFile().apply { writeText("old ZIP") }
+            val newContents = "new ZIP".toByteArray()
+            val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
+            server.createContext("/archive") { response ->
+                response.sendResponseHeaders(200, newContents.size.toLong())
+                response.responseBody.use { it.write(newContents) }
+            }
+            server.start()
+            try {
+                val url = "http://127.0.0.1:${server.address.port}/archive"
+                ToolDownloads.download(url, destination, null, offline = true, refresh = true) {}
+                assertEquals("old ZIP", destination.readText())
+                ToolDownloads.download(url, destination, null, offline = false, refresh = true) {}
+                assertContentEquals(newContents, destination.readBytes())
+            } finally {
+                server.stop(0)
+            }
+        }
+
     @Test
     fun `offline preparation continues with an independent APK after ADB and Python fail`(
         @TempDir dir: Path,
@@ -373,7 +511,7 @@ class ToolchainTest {
                 destination,
                 ToolDownloads.digest(source),
                 false,
-                progress::add,
+                progress = progress::add,
             )
             assertContentEquals(bytes, destination.readBytes())
             assertEquals(bytes.size.toLong(), progress.last().bytes)

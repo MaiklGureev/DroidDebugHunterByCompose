@@ -23,12 +23,12 @@ import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
-import hunter.app.AppState
 import hunter.core.AppFiles
 import hunter.core.HostPlatform
 import hunter.core.tr
 import hunter.features.settings.Settings
 import hunter.features.tools.SetupMethod
+import hunter.features.tools.ToolLayout
 import hunter.features.tools.ToolPolicy
 import hunter.features.tools.ToolSetupOptions
 import hunter.ui.Check
@@ -40,12 +40,13 @@ import javax.swing.JFileChooser
 
 @Composable
 fun ToolSetupPanel(
-    model: AppState,
     draft: Settings,
     change: (Settings) -> Unit,
     apply: () -> Unit,
     enabled: Boolean,
     valid: Boolean,
+    directoryWarnings: List<String>,
+    onCheckFolders: () -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(tr("Tool settings"), style = MaterialTheme.typography.titleMedium)
@@ -65,14 +66,12 @@ fun ToolSetupPanel(
             ToolAction(tr("Use app data folder"), enabled = enabled) {
                 change(draft.copy(tools = File(AppFiles.data, "tools/${HostPlatform.current.key}").absolutePath))
             }
-            ToolAction(tr("Check / create folders"), Icons.Outlined.CreateNewFolder, enabled && valid) {
-                apply()
-                model.initializeToolFolders()
-            }
+            ToolAction(tr("Check / create folders"), Icons.Outlined.CreateNewFolder,
+                enabled && valid, onClick = onCheckFolders)
         }
-        if (model.toolDirectoryWarnings.isNotEmpty()) {
+        if (directoryWarnings.isNotEmpty()) {
             Text(
-                model.toolDirectoryWarnings.joinToString("\n"),
+                directoryWarnings.joinToString("\n"),
                 color = MaterialTheme.colorScheme.error,
                 style = MaterialTheme.typography.labelSmall,
             )
@@ -125,6 +124,7 @@ fun ToolDownloadVersions(
     versionIds: List<String>,
     options: ToolSetupOptions,
     enabled: Boolean,
+    prepareLatest: (() -> Unit)?,
     onChange: (Map<String, String>) -> Unit,
 ) {
     var editing by remember { mutableStateOf(false) }
@@ -133,13 +133,18 @@ fun ToolDownloadVersions(
         Text(title)
     }
     if (editing) {
+        val editingAdb = versionIds.singleOrNull() == "adb"
+        val adbLatestLabel = if (ToolLayout.hasGoogleAdbArchive()) "Latest from Google" else "Version from ZIP"
+        var useLatest by remember(options.versions) { mutableStateOf(editingAdb && options.adbLatest) }
         var versions by remember(versionIds, options.versions) {
-            mutableStateOf(versionIds.associateWith(options::version))
+            mutableStateOf(versionIds.associateWith {
+                if (it == "adb" && options.adbLatest) ToolPolicy.target(it) else options.version(it)
+            })
         }
         val focus = remember { FocusRequester() }
-        val valid = versions.values.all(ToolPolicy::validVersion)
+        val valid = useLatest || versions.values.all(ToolPolicy::validVersion)
         val save = {
-            onChange(versions)
+            onChange(if (useLatest) versions + ("adb" to ToolPolicy.ADB_LATEST) else versions)
             editing = false
         }
         AlertDialog(
@@ -157,7 +162,28 @@ fun ToolDownloadVersions(
                     },
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    for ((index, id) in versionIds.withIndex()) {
+                    if (editingAdb) {
+                        ToolChoices(
+                            listOf(true, false), useLatest,
+                            { tr(if (it) adbLatestLabel else "Specific version") },
+                            enabled,
+                        ) { useLatest = it }
+                    }
+                    if (useLatest) {
+                        Text(
+                            tr(if (options.adbArchive.isNotBlank()) "The selected local ZIP takes priority."
+                                else if (options.offline) "Offline mode uses the cached Platform Tools ZIP."
+                                else "Downloads the current Platform Tools ZIP for this computer."),
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                        if (prepareLatest != null) {
+                            ToolAction(tr("Download and prepare"), enabled = enabled) {
+                                editing = false
+                                prepareLatest()
+                            }
+                        }
+                    }
+                    for ((index, id) in versionIds.withIndex()) if (!useLatest) {
                         val input = versions.getValue(id)
                         val validVersion = ToolPolicy.validVersion(input)
                         OutlinedTextField(
@@ -176,7 +202,7 @@ fun ToolDownloadVersions(
                             singleLine = true,
                         )
                     }
-                    LaunchedEffect(Unit) { focus.requestFocus() }
+                    LaunchedEffect(useLatest) { if (!useLatest) focus.requestFocus() }
                 }
             },
             confirmButton = { TextButton(onClick = save, enabled = valid) { Text(tr("Apply")) } },

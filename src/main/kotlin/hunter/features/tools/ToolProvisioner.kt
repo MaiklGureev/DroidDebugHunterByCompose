@@ -1,6 +1,7 @@
 package hunter.features.tools
 
 import hunter.core.AppFiles
+import hunter.core.logHandledFailure
 import hunter.core.HostOs
 import hunter.core.HostPlatform
 import hunter.core.Processes
@@ -53,9 +54,9 @@ object ToolProvisioner {
                 .map { if (it in listOf("server", "gadget")) "frida" else it }
                 .distinct().forEach { id ->
                 appendLine(
-                    "${ToolPolicy.names[id]}: ${options.version(id)} · ${tr("Target")}: ${ToolPolicy.target(id)}"
+                    "${ToolPolicy.names[id]}: ${options.downloadVersionLabel(id)} · ${tr("Target")}: ${ToolPolicy.target(id)}"
                 )
-                if (options.version(id) != ToolPolicy.target(id))
+                if (options.version(id) != ToolPolicy.target(id) && !(id == "adb" && options.adbLatest))
                     appendLine(ToolPolicy.notice(id, options.version(id)))
             }
             if (options.adbArchive.isNotBlank())
@@ -157,12 +158,14 @@ object ToolProvisioner {
                     withTimeout(300_000) { block() }
                 } else block()
                 ToolStep(name, ToolStepState.Prepared)
-            } catch (_: TimeoutCancellationException) {
+            } catch (e: TimeoutCancellationException) {
                 currentCoroutineContext().ensureActive()
+                logHandledFailure("tools", "$title preparation timed out", e)
                 ToolStep(name, ToolStepState.Failed, tr("The check timed out"))
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
+                logHandledFailure("tools", "$title preparation failed", e)
                 ToolStep(name, ToolStepState.Failed, e.message ?: e.javaClass.simpleName)
             }
             steps += outcome
@@ -177,10 +180,10 @@ object ToolProvisioner {
         val assets = selected.filter { it in bundleComponents && it != "wireguard" }
         val packagesRequested = assets.any { it in pythonPackages }
         val nativeRequested = assets.any { it !in pythonPackages }
-        var helper = if (nativeRequested && !packagesRequested && "python" !in selected)
-            existingPython(config) else null
-        var pythonReady = false
-        if ("python" in selected || packagesRequested || (nativeRequested && helper == null)) {
+        var helper = if (assets.isNotEmpty() && "python" !in selected)
+            existingPython(config, requirePip = packagesRequested) else null
+        var pythonReady = helper != null
+        if ("python" in selected || (assets.isNotEmpty() && helper == null)) {
             step("python") {
                 val method = config.setup.method
                 progress(SetupProgress(tr("Preparing Python"), tr(method.key)))
@@ -212,19 +215,23 @@ object ToolProvisioner {
     private suspend fun <T> available(check: suspend () -> T): T? =
         try {
             check()
-        } catch (_: TimeoutCancellationException) {
+        } catch (e: TimeoutCancellationException) {
             currentCoroutineContext().ensureActive()
+            logHandledFailure("tools", "Existing Python probe timed out", e)
             null
         } catch (e: CancellationException) {
             throw e
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            logHandledFailure("tools", "Existing Python probe failed", e)
             null
         }
 
-    private suspend fun existingPython(config: Settings): String? = available {
+    private suspend fun existingPython(config: Settings, requirePip: Boolean = false): String? = available {
         val command = config.pythonCommand
+        val probe = "import sys; assert sys.version_info >= (3, 11)" +
+            if (requirePip) "; import pip" else ""
         Processes.run(
-            listOf(command, "-c", "import sys; assert sys.version_info >= (3, 11)"),
+            listOf(command, "-c", probe),
             config.environment() + ("PYTHONPATH" to ""),
             8000,
         ).requireSuccess()
@@ -356,7 +363,7 @@ object ToolProvisioner {
                     File(cache, "uv/$name"),
                     digest,
                     config.setup.offline,
-                    progress,
+                    progress = progress,
                 )
             progress(SetupProgress(tr("Unpacking uv"), name))
             val context = currentCoroutineContext()

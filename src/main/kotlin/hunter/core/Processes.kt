@@ -1,5 +1,6 @@
 package hunter.core
 
+import java.io.File
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.*
 
@@ -15,11 +16,24 @@ data class CommandResult(val code: Int, val output: String, val error: String) {
 
 /** Every blocking read/wait is isolated on IO; cancellation always reaps the owned process tree. */
 object Processes {
-    fun start(args: List<String>, env: Map<String, String> = emptyMap()): Process =
-        ProcessBuilder(args).apply { environment().putAll(env) }.start()
+    fun start(
+        args: List<String>,
+        env: Map<String, String> = emptyMap(),
+        log: ApplicationLog? = null,
+    ): Process {
+        val executable = args.firstOrNull()?.let { File(it).name }.orEmpty()
+        return try {
+            ProcessBuilder(args).apply { environment().putAll(env) }.start().also {
+                log?.debug("process", "Started $executable · PID ${it.pid()}")
+            }
+        } catch (failure: Exception) {
+            log?.debug("process", "Could not start $executable · ${failure.javaClass.simpleName}")
+            throw failure
+        }
+    }
 
-    fun kill(process: Process) {
-        runCatching {
+    fun kill(process: Process, terminateDescendants: Boolean = true) {
+        if (terminateDescendants) runCatching {
             process.descendants().use { descendants ->
                 descendants.forEach { it.destroyForcibly() }
             }
@@ -28,9 +42,9 @@ object Processes {
     }
 
     /** destroyForcibly only requests termination; await the OS reaper even during cancellation. */
-    suspend fun reap(process: Process) =
+    suspend fun reap(process: Process, terminateDescendants: Boolean = true) =
         withContext(Dispatchers.IO + NonCancellable) {
-            kill(process)
+            kill(process, terminateDescendants)
             check(process.waitFor(3000, TimeUnit.MILLISECONDS)) {
                 tr("Could not terminate owned process {0}", process.pid())
             }
@@ -40,9 +54,12 @@ object Processes {
         args: List<String>,
         env: Map<String, String> = emptyMap(),
         timeoutMs: Long = 30000,
+        terminateDescendants: Boolean = true,
     ): CommandResult =
         withContext(Dispatchers.IO) {
-            val process = start(args, env)
+            val log = currentCoroutineContext()[ApplicationLog]
+            val started = System.nanoTime()
+            val process = start(args, env, log)
             try {
                 withTimeout(timeoutMs) {
                     coroutineScope {
@@ -62,14 +79,19 @@ object Processes {
                         }
                         try {
                             val code = runInterruptible { process.waitFor() }
+                            val elapsed = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started)
+                            log?.debug("process", "PID ${process.pid()} exited with code $code · ${elapsed} ms")
                             CommandResult(code, output.await(), error.await())
                         } finally {
-                            if (!isActive) kill(process)
+                            if (!isActive) kill(process, terminateDescendants)
                         }
                     }
                 }
+            } catch (failure: Exception) {
+                log?.debug("process", "PID ${process.pid()} interrupted · ${failure.javaClass.simpleName}")
+                throw failure
             } finally {
-                reap(process)
+                reap(process, terminateDescendants)
                 process.inputStream.close()
                 process.errorStream.close()
                 process.outputStream.close()
@@ -88,7 +110,10 @@ object Processes {
     }
 }
 
-class StreamingProcess(private val process: Process) {
+class StreamingProcess(
+    private val process: Process,
+    private val terminateDescendants: Boolean = true,
+) {
     @Volatile
     var stopping = false
         private set
@@ -115,14 +140,17 @@ class StreamingProcess(private val process: Process) {
                     }
                     try {
                         output.await()
-                        runInterruptible { process.waitFor() }
+                        runInterruptible { process.waitFor() }.also { code ->
+                            currentCoroutineContext()[ApplicationLog]
+                                ?.debug("process", "Streaming PID ${process.pid()} exited with code $code")
+                        }
                     } finally {
                         // Close the pipes before coroutineScope waits for the stderr reader.
-                        if (!isActive) Processes.kill(process)
+                        if (!isActive) Processes.kill(process, terminateDescendants)
                     }
                 }
             } finally {
-                Processes.reap(process)
+                Processes.reap(process, terminateDescendants)
             }
         }
 
@@ -137,24 +165,25 @@ class StreamingProcess(private val process: Process) {
                     }
                 }
             if (!cooperative || !process.waitFor(2000, TimeUnit.MILLISECONDS))
-                Processes.kill(process)
-            Processes.reap(process)
+                Processes.kill(process, terminateDescendants)
+            Processes.reap(process, terminateDescendants)
         }
 
     companion object {
         suspend fun start(
             args: List<String>,
             env: Map<String, String> = emptyMap(),
+            terminateDescendants: Boolean = true,
         ): StreamingProcess {
             var owned: Process? = null
             return try {
                 withContext(Dispatchers.IO) {
-                    val process = Processes.start(args, env)
+                    val process = Processes.start(args, env, currentCoroutineContext()[ApplicationLog])
                     owned = process
-                    StreamingProcess(process)
+                    StreamingProcess(process, terminateDescendants)
                 }
             } catch (e: CancellationException) {
-                owned?.let { Processes.reap(it) }
+                owned?.let { Processes.reap(it, terminateDescendants) }
                 throw e
             }
         }

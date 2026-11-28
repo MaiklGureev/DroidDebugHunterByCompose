@@ -12,7 +12,7 @@ Choose English or Русский in Settings → Interface language. The interfa
 
 Analyze HAR immediately: Ctrl+O and choose a file, or try the repository's synthetic sample. No phone, ADB or Python is needed.
 
-For Android, open **Connection**. The **ADB software** block handles the device connection. **Capture software** shows Python and the components for the selected capture method. Use **Prepare capture tools** to prepare those components together. Versions, paths and parameters are shown next to each tool. Use **Manual download** for links or **Download and prepare** to fetch a single component from the app. See [tool preparation](../setup/DOWNLOADS.en.md).
+For Android, open **Connection** and select a capture method. **Requirements and next steps** shows tool status and the actions for that method. **Open tool settings** takes you to the tool versions, paths and download options. Use **Prepare missing tools** for the current method or **Download and prepare** for a single component. **Manual download** opens links and placement instructions. See [tool preparation](../setup/DOWNLOADS.en.md).
 
 Open **Connection**, choose USB, Wi-Fi, or Emulator, then select the device. For USB, enable debugging and confirm the RSA key on the phone. Android 11+ also supports Wi-Fi pairing with a six-digit code followed by connection to its separate debugging port. See [Android setup](../setup/ANDROID_SETUP_GUIDE.en.md).
 
@@ -28,10 +28,12 @@ Choose a capture method and prepare it on **Connection**. For Frida or WireGuard
 
 | Mode | Requirements and limits |
 | --- | --- |
-| HTTP(S) proxy | ADB reverse and an app that uses Android's system proxy. HTTPS requires CA trust. Package/UID are unknown. |
+| HTTP(S) proxy | Device-wide capture for apps that use Android's system proxy over ADB reverse. HTTPS requires CA trust. Package/UID are unknown. |
 | Frida · OkHttp | OkHttp 3/4; a root server or debuggable + run-as/JDWP + Gadget. |
 | Frida · Native TLS | Accessible native TLS functions in the selected process. HTTP/1 and HTTP/2; hidden/static functions and HTTP/3 may be unavailable. |
 | VPN · WireGuard | WireGuard, UDP access to the computer, an allowlisted package profile and Android VPN consent. HTTPS requires CA trust. |
+
+For one app, choose WireGuard or Frida. **Selected app only** filters the traffic list by the exact package and compares device and UID when available. Turn it off to review other saved requests. **Set up WireGuard for one app** on the proxy screen opens the VPN setup.
 
 Frida client/server/Gadget must share the same version (target 17.26.2) and match the relevant ABI; other matching versions are allowed with warnings. VPN package attribution comes from the profile allowlist, not UID detection from packets. Avoid competing capture sessions for the same device. See [step-by-step setup](../setup/ANDROID_SETUP_GUIDE.en.md).
 
@@ -42,6 +44,10 @@ Filters and sorting apply to accumulated traffic and HAR. Double-click, Enter or
 Body views: Auto, Text, JSON, HTML text, Image, HEX, Base64. Saving the body preserves captured bytes; saving the view exports displayed text. Partial captures are explicitly marked. See [body viewing](BODY_VIEWER.en.md).
 
 Choose PowerShell or POSIX shell on the cURL tab. Commands can contain cookies, tokens and request bodies; review before sharing. HAR export saves visible HTTP requests and partial-capture metadata. Diagnostic streams are not converted into invented HTTP requests.
+
+## Application log
+
+**Settings → Application log** shows the location of `logs/application.log` in the application data directory. It records startup, operations, connection and tool diagnostics, and errors. The active log rotates at 5 MiB and keeps one previous file. **Export log** saves the retained diagnostic history as a UTF-8 file. **Clear log** clears both files and the on-screen journal after confirmation. HTTP captures and Android Logcat rows use their own exports.
 
 ## Logcat
 

@@ -140,12 +140,12 @@ Record limits are supplemented by approximate memory budgets of 96 MiB for HTTP 
 python3 -m unittest discover -s scripts -p 'test_*.py'
 ```
 
-Windows also supports `.\run.ps1 -Task test` and `.\run.ps1 -Task createDistributable`. Native output is under `build/compose/binaries-1.1.3/main/app/`. Copy the complete app directory, including its runtime. Build installers on their target OS with `packageMsi`, `packageDmg` or `packageDeb`. The Compose plugin prepares WiX for MSI; its first download needs GitHub access.
+Windows also supports `.\run.ps1 -Task test` and `.\run.ps1 -Task createDistributable`. Native output is under `build/compose/binaries-1.1.4/main/app/`. Copy the complete app directory, including its runtime. Build installers on their target OS with `packageMsi`, `packageDmg` or `packageDeb`. The Compose plugin prepares WiX for MSI; its first download needs GitHub access.
 
 Check the Windows launcher without system Java:
 
 ```powershell
-.\scripts\smoke_windows.ps1 -ApplicationRoot .\build\compose\binaries-1.1.3\main\app\DroidDebugHunterByCompose
+.\scripts\smoke_windows.ps1 -ApplicationRoot .\build\compose\binaries-1.1.4\main\app\DroidDebugHunterByCompose
 ```
 
 On macOS/Linux, use `python3 scripts/package_release.py --runtime-check`. These checks exercise private Java, device selection and model shutdown using temporary data without connecting to Android.

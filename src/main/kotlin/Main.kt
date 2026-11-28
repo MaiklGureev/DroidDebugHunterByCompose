@@ -7,9 +7,12 @@ import hunter.app.HunterApp
 import hunter.app.Page
 import hunter.app.checkApplication
 import hunter.app.checkToolSetup
+import hunter.core.AppFiles
+import hunter.core.ApplicationLog
 import hunter.core.HostPlatform
 import hunter.core.json
 import hunter.core.tr
+import hunter.features.settings.Settings
 import hunter.features.traffic.ui.ExchangeContent
 import hunter.ui.HunterTheme
 import hunter.ui.OutputContent
@@ -40,11 +43,19 @@ fun main(args: Array<String>) {
             )
         return
     }
-    launchHunter()
+    val applicationLog = ApplicationLog(AppFiles.applicationLog)
+    val previousHandler = Thread.getDefaultUncaughtExceptionHandler()
+    Thread.setDefaultUncaughtExceptionHandler { thread, failure ->
+        applicationLog.crash(thread, failure)
+        if (previousHandler != null) previousHandler.uncaughtException(thread, failure)
+        else failure.printStackTrace(System.err)
+    }
+    launchHunter(Settings.load(), applicationLog)
 }
 
-private fun launchHunter() = application {
-    val model = remember { AppState() }
+private fun launchHunter(initialSettings: Settings, applicationLog: ApplicationLog) = application {
+    val model = remember { AppState(initialSettings, applicationLog) }
+    val settings by model.settings.uiState.collectAsState()
     var closing by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     fun close() {
@@ -76,7 +87,7 @@ private fun launchHunter() = application {
                         true
                     }
                     event.isPlatformShortcutPressed && event.key == Key.O -> {
-                        chooseFile(title = tr("Import HAR"))?.let(model::importHar)
+                        chooseFile(title = tr("Import HAR"))?.let(model.traffic::importHar)
                         true
                     }
                     else -> false
@@ -84,7 +95,7 @@ private fun launchHunter() = application {
         },
     ) {
         LaunchedEffect(Unit) { window.minimumSize = Dimension(1100, 720) }
-        HunterTheme(model.settings.isDarkTheme()) { HunterApp(model, closing) }
+        HunterTheme(settings.isDarkTheme()) { HunterApp(model, closing) }
     }
     model.outputs.toList().forEach { output ->
         key(output.id) {
@@ -99,27 +110,32 @@ private fun launchHunter() = application {
                     } else false
                 },
             ) {
-                HunterTheme(model.settings.isDarkTheme()) { OutputContent(model, output) }
+                HunterTheme(settings.isDarkTheme()) { OutputContent(model, output) }
             }
         }
     }
-    model.detailIds.toList().forEach { id ->
+    val traffic = model.traffic
+    val detailIds by traffic.detailIds.collectAsState(traffic.uiState.value.detailIds)
+    detailIds.forEach { id ->
         key(id) {
-            val initial = remember { model.exchanges.firstOrNull { it.id == id } }
-            val exchange = model.exchanges.firstOrNull { it.id == id } ?: initial
+            val initial = remember(traffic, id) {
+                traffic.uiState.value.exchanges.firstOrNull { it.id == id }
+            }
+            val current by remember(traffic, id) { traffic.exchange(id) }.collectAsState(initial)
+            val exchange = current ?: initial
             if (exchange != null)
                 Window(
-                    onCloseRequest = { model.detailIds.remove(id) },
+                    onCloseRequest = { traffic.closeDetails(id) },
                     title = "${exchange.method} · ${exchange.host}",
                     state = rememberWindowState(width = 1100.dp, height = 800.dp),
                     onPreviewKeyEvent = {
                         if (it.type == KeyEventType.KeyDown && it.key == Key.Escape) {
-                            model.detailIds.remove(id)
+                            traffic.closeDetails(id)
                             true
                         } else false
                     },
                 ) {
-                    HunterTheme(model.settings.isDarkTheme()) { ExchangeContent(model, exchange) }
+                    HunterTheme(settings.isDarkTheme()) { ExchangeContent(model, exchange) }
                 }
         }
     }

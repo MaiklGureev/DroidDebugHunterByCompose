@@ -24,7 +24,7 @@ On **Traffic**, refresh the app list and select the current Android profile's pa
 
 ## 3. Choose a mode
 
-Choose a capture method on **Connection**. For Frida or WireGuard, select the target app on **Traffic** before preparing the mode. Check readiness on **Connection**, then start capture on **Traffic**. CA installation/trust, profile import and VPN consent are manual Android steps. Trigger a fresh network action in the target app to validate actual capture.
+Choose a capture method on **Connection**. Each card shows whether the current setup needs root. Below it, **Requirements and next steps** shows the required tools, the device and app, and the actions for the selected method. Use **Check readiness** after making changes. **Start capture** opens Traffic. Install and trust the CA, import the VPN profile, and confirm VPN permission on Android as needed. Trigger a fresh network action in the target app to verify capture.
 
 ### HTTP(S) proxy
 
@@ -36,7 +36,7 @@ If HTTP works but HTTPS fails, check CA trust and your debug APK's pinning. If n
 
 ### Frida · OkHttp with root
 
-Open **Check Frida connection** in the Frida block on **Connection**. The checklist shows the active Python Frida version, device ABI, installed server version when available, and the result of a real Frida request through a temporary ADB forward. An independently started server can respond without exposing its exact version. Follow the proposed action to prepare tools, install or start the matching server, or choose an app. Confirm root access on Android when starting the server. `adb root` works on supported emulators/debug firmware. The server listens on Android `127.0.0.1:27042`.
+Use **Check readiness** on **Connection**. The Frida checklist shows the active Python Frida version, device ABI, installed server version when available, and the result of a Frida request through a temporary ADB forward. An independently started server can respond without exposing its exact version. Follow the proposed action to prepare tools, install or start the matching server, or choose an app. Confirm root access on Android when starting the server. `adb root` works on supported emulators/debug firmware. The server listens on Android `127.0.0.1:27042`.
 
 Select a package, OkHttp mode and optionally Launch app at startup (`Запустить приложение при старте`). Disable the Gadget option when using the root-server scenario. Start capture and repeat the network action from process startup. Disable launch-at-start to attach to a running app.
 
@@ -59,8 +59,8 @@ The checklist verifies `run-as` and the local Gadget ELF for the selected app AB
 ### VPN · WireGuard
 
 1. Select the device, package and VPN mode. Set a computer IP/DNS name reachable from Android and a UDP port. Genymotion VirtualBox commonly uses `10.0.3.2`, Android Emulator `10.0.2.2`; a physical phone uses the computer's LAN address.
-2. Prepare profile (`Подготовить профиль`), then Send to WireGuard (`Передать в WireGuard`). If the client is absent, a prepared local APK is used. On Android, import `Download/ddh.conf` using **+ → Import from file**.
-3. For HTTPS, prepare/send/install the CA through **CA certificate**. The target app must trust it; VPN does not disable pinning.
+2. If WireGuard is missing from the selected Android profile, get the APK through tool settings and click **Install WireGuard on Android**. Then use **Prepare profile** and **Send VPN profile**. On Android, import `Download/ddh.conf` using **+ → Import from file** and keep the tunnel name `ddh`.
+3. Preparing the profile also prepares the CA. For HTTPS, click **Send CA**, then install it as a **CA certificate** on Android. The target app must trust it.
 4. Allow inbound UDP to the chosen port for the actual Python executable in the firewall. Start capture on the computer, enable the Android tunnel and confirm VPN consent.
 5. Enable WireGuard **Remote control** for automatic shutdown of the owned tunnel. Otherwise verify tunnel shutdown manually when stopping capture.
 

@@ -1,11 +1,13 @@
 package hunter.features.help.ui
 
+import androidx.compose.desktop.ui.tooling.preview.Preview
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.*
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -13,120 +15,62 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import hunter.app.AppState
 import hunter.app.Page
-import hunter.core.AppFiles
 import hunter.core.tr
-import hunter.features.help.Markdown
-import hunter.features.help.MarkdownLocation
-import hunter.features.help.MarkdownTarget
-import hunter.features.help.isMarkdownFile
-import hunter.features.help.resolveMarkdownLink
+import hunter.features.help.HelpTopic
+import hunter.features.help.HelpUiState
 import hunter.features.traffic.CaptureMode
 import hunter.ui.Action
 import hunter.ui.Choice
+import hunter.ui.HunterTheme
 import hunter.ui.MiniIcon
 import hunter.ui.Muted
 import hunter.ui.Panel
 import hunter.ui.chooseFile
 import hunter.ui.copyText
 import hunter.ui.openFile
-import java.io.File
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 @Composable
 fun HelpScreen(model: AppState) {
-    val topics =
-        listOf(
-            tr("Quick start"),
-            "Windows / macOS / Linux",
-            tr("Android: complete setup"),
-            tr("ADB tools"),
-            "Logcat",
-            tr("Request and response content"),
-            tr("Tools and downloads"),
-            tr("Third-party components"),
-        )
-    val files =
-        listOf(
-            "",
-            "setup/PLATFORMS.md",
-            "setup/ANDROID_SETUP_GUIDE.md",
-            "android/ADB_TOOLS.md",
-            "android/LOGCAT.md",
-            "guides/BODY_VIEWER.md",
-            "setup/DOWNLOADS.md",
-            "legal/THIRD_PARTY_NOTICES.md",
-        )
-    var topic by remember { mutableStateOf(0) }
-    val language = model.settings.language
-    val helpRoot = remember { File(AppFiles.runtime, "help") }
-    var location by remember { mutableStateOf<MarkdownLocation?>(null) }
-    var history by remember { mutableStateOf<List<MarkdownLocation?>>(emptyList()) }
-    val currentLocation =
-        location
-            ?: if (topic == 0) null
-            else MarkdownLocation(File(helpRoot, language.helpFile(files[topic])), helpRoot)
-    val text by
-        produceState<Pair<File, Result<String>>?>(null, currentLocation?.file) {
-            value = null
-            currentLocation?.let { document ->
-                value =
-                    document.file to
-                        withContext(Dispatchers.IO) { runCatching { Markdown.read(document.file) } }
-            }
-        }
-    fun openDocument(document: MarkdownLocation) {
-        history = history + listOf(currentLocation)
-        location = document
-    }
-    fun followLink(destination: String) {
-        val current = currentLocation ?: return
-        model.scope.launch {
-            try {
-                when (
-                    val target =
-                        withContext(Dispatchers.IO) { resolveMarkdownLink(current, destination) }
-                ) {
-                    is MarkdownTarget.Document -> openDocument(target.location)
-                    is MarkdownTarget.Web ->
-                        withContext(Dispatchers.IO) {
-                            java.awt.Desktop.getDesktop().browse(target.uri)
-                        }
-                    null ->
-                        model.error =
-                            tr("This link is unavailable in the Markdown viewer: {0}", destination)
-                }
-            } catch (e: Exception) {
-                model.error = e.message ?: tr("Guide unavailable")
-            }
-        }
-    }
+    val help = model.help
+    val state by help.uiState.collectAsState()
+    HelpScreenContent(
+        state = state,
+        onTopic = help::selectTopic,
+        onBack = help::back,
+        onOpenMarkdown = { chooseFile(title = tr("Open Markdown"))?.let(help::openMarkdown) },
+        onOpenFolder = { openFile(model, help.helpRoot) },
+        onConnection = { model.page = Page.Connection },
+        onOpenHar = { chooseFile(title = tr("Import HAR"))?.let(model.traffic::importHar) },
+        onLink = help::followLink,
+        onCopy = { copyText(model, it) },
+    )
+}
+
+@Composable
+private fun HelpScreenContent(
+    state: HelpUiState,
+    onTopic: (HelpTopic) -> Unit,
+    onBack: () -> Unit,
+    onOpenMarkdown: () -> Unit,
+    onOpenFolder: () -> Unit,
+    onConnection: () -> Unit,
+    onOpenHar: () -> Unit,
+    onLink: (String) -> Unit,
+    onCopy: (String) -> Unit,
+) {
+    val currentLocation = state.location
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            MiniIcon(Icons.AutoMirrored.Outlined.ArrowBack, tr("Back"), history.isNotEmpty()) {
-                location = history.last()
-                history = history.dropLast(1)
-            }
+            MiniIcon(Icons.AutoMirrored.Outlined.ArrowBack, tr("Back"), state.canGoBack, onClick = onBack)
             Choice(
-                topic,
-                topics.indices.toList(),
-                { topics[it] },
-                {
-                    topic = it
-                    location = null
-                    history = emptyList()
-                },
+                state.topic,
+                HelpTopic.entries,
+                { tr(it.titleKey) },
+                onTopic,
                 Modifier.width(320.dp),
             )
-            Action(tr("Open Markdown"), Icons.Outlined.FileOpen) {
-                chooseFile(title = tr("Open Markdown"))?.let { file ->
-                    if (isMarkdownFile(file))
-                        openDocument(MarkdownLocation(file, file.absoluteFile.parentFile))
-                    else model.error = tr("Select a Markdown file (.md or .markdown)")
-                }
-            }
-            Action(tr("Open help folder"), Icons.Outlined.FolderOpen) { openFile(model, helpRoot) }
+            Action(tr("Open Markdown"), Icons.Outlined.FileOpen, onClick = onOpenMarkdown)
+            Action(tr("Open help folder"), Icons.Outlined.FolderOpen, onClick = onOpenFolder)
         }
         if (currentLocation == null)
             Column(
@@ -143,7 +87,7 @@ fun HelpScreen(model: AppState) {
                             "Open Connection to set up USB, Wi-Fi or an emulator. Then choose the target app on Traffic."
                         )
                     )
-                    Action(tr("Set up connection")) { model.page = Page.Connection }
+                    Action(tr("Set up connection"), onClick = onConnection)
                 }
                 Panel(tr("Choose a capture mode"), modifier = Modifier.fillMaxWidth()) {
                     CaptureMode.entries.forEach {
@@ -163,9 +107,7 @@ fun HelpScreen(model: AppState) {
                             "HAR import and request analysis work without ADB, Python or Frida. Double-click for headers, bodies and cURL in a separate window. HAR export preserves visible HTTP requests, including partial-body markers."
                         )
                     )
-                    Action(tr("Open HAR"), Icons.Outlined.FileOpen) {
-                        chooseFile(title = tr("Import HAR"))?.let(model::importHar)
-                    }
+                    Action(tr("Open HAR"), Icons.Outlined.FileOpen, onClick = onOpenHar)
                 }
                 Panel(tr("Keyboard and limitations"), modifier = Modifier.fillMaxWidth()) {
                     Text(
@@ -177,7 +119,7 @@ fun HelpScreen(model: AppState) {
                 }
             }
         else {
-            val content = text?.takeIf { it.first == currentLocation.file }?.second
+            val content = state.content
             key(currentLocation.file.absolutePath) {
                 when {
                     content == null ->
@@ -191,14 +133,31 @@ fun HelpScreen(model: AppState) {
                         )
                     else ->
                         MarkdownViewer(
-                            source = content.getOrThrow(),
+                            document = content.getOrThrow(),
                             modifier = Modifier.fillMaxSize(),
                             anchor = currentLocation.anchor,
-                            onLink = ::followLink,
-                            onCopy = { copyText(model, it) },
+                            onLink = onLink,
+                            onCopy = onCopy,
                         )
                 }
             }
+        }
+    }
+}
+
+@Preview
+@Composable
+private fun HelpLightPreview() = HelpPreview(dark = false)
+
+@Preview
+@Composable
+private fun HelpDarkPreview() = HelpPreview(dark = true)
+
+@Composable
+private fun HelpPreview(dark: Boolean) {
+    HunterTheme(dark) {
+        Surface(Modifier.size(width = 920.dp, height = 580.dp)) {
+            HelpScreenContent(HelpUiState(), {}, {}, {}, {}, {}, {}, {}, {})
         }
     }
 }

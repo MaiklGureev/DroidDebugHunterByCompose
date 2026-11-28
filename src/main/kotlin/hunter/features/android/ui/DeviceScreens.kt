@@ -48,6 +48,8 @@ val AndroidConnection.icon
 
 @Composable
 fun DevicesScreen(model: AppState) {
+    val connection = model.connection
+    val state by connection.uiState.collectAsState()
     val enabled = model.busy.isEmpty()
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
@@ -61,32 +63,32 @@ fun DevicesScreen(model: AppState) {
             Text(tr("ADB devices"), fontWeight = FontWeight.SemiBold)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Action(tr("Set up connection"), Icons.Outlined.Cable) { model.page = Page.Connection }
-                Action(tr("Restart ADB"), enabled = enabled, onClick = model::restartAdb)
+                Action(tr("Restart ADB"), enabled = enabled, onClick = connection::restartAdb)
             }
         }
-        if (model.devices.isEmpty()) Text(tr("No devices"), color = Muted)
-        AdbDeviceRows(model, model.devices, enabled)
+        if (state.devices.isEmpty()) Text(tr("No devices"), color = Muted)
+        AdbDeviceRows(state.devices, state.selectedDevice?.serial, enabled, connection::selectDevice)
         Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             Panel(
                 tr("Selected device"),
-                model.selectedDevice?.label ?: tr("Select a device"),
+                state.selectedDevice?.label ?: tr("Select a device"),
                 Modifier.weight(1f),
             ) {
                 Action(
                     tr("Android, ABI, battery"),
                     Icons.Outlined.Info,
-                    enabled && model.selectedDevice?.state == "device",
+                    enabled && state.selectedDevice?.state == "device",
                 ) {
-                    model.perform(AdbAction.DeviceInfo)
+                    connection.perform(AdbAction.DeviceInfo)
                 }
                 Action(
                     tr("Check root"),
                     Icons.Outlined.AdminPanelSettings,
-                    enabled && model.selectedDevice?.state == "device",
+                    enabled && state.selectedDevice?.state == "device",
                 ) {
                     model.task(tr("Checking root")) {
-                        val target = model.serial()
-                        val adb = Adb(model.settings)
+                        val target = connection.serial()
+                        val adb = Adb(model.settings.uiState.value)
                         val current = adb.shell(target, "id")
                         val root = adb.device(target, "shell", "su -c id", timeout = 8000)
                         model.outputs +=
@@ -96,8 +98,8 @@ fun DevicesScreen(model: AppState) {
                             )
                     }
                 }
-                Action("adb root", enabled = enabled && model.selectedDevice?.state == "device",
-                    onClick = model::rootAdb)
+                Action("adb root", enabled = enabled && state.selectedDevice?.state == "device",
+                    onClick = connection::rootAdb)
                 Text(
                     tr(
                         "unauthorized: unlock the screen and allow debugging. offline: reconnect USB or the network connection."
@@ -111,10 +113,15 @@ fun DevicesScreen(model: AppState) {
 }
 
 @Composable
-fun AdbDeviceRows(model: AppState, devices: List<Device>, enabled: Boolean) {
+fun AdbDeviceRows(
+    devices: List<Device>,
+    selectedSerial: String?,
+    enabled: Boolean,
+    onSelect: (Device) -> Unit,
+) {
     Column(Modifier.selectableGroup(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         devices.forEach { device ->
-            val selected = model.selectedDevice?.serial == device.serial
+            val selected = selectedSerial == device.serial
             Surface(
                 shape = RoundedCornerShape(10.dp),
                 border =
@@ -125,7 +132,7 @@ fun AdbDeviceRows(model: AppState, devices: List<Device>, enabled: Boolean) {
             ) {
                 Row(
                     Modifier.fillMaxWidth()
-                        .selectable(selected, enabled, role = Role.RadioButton) { model.selectDevice(device) }
+                        .selectable(selected, enabled, role = Role.RadioButton) { onSelect(device) }
                         .padding(horizontal = 14.dp, vertical = 10.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(14.dp),
@@ -161,8 +168,10 @@ fun AdbDeviceRows(model: AppState, devices: List<Device>, enabled: Boolean) {
 
 @Composable
 fun AppsScreen(model: AppState) {
+    val connection = model.connection
+    val state by connection.uiState.collectAsState()
     val enabled = model.busy.isEmpty()
-    val app = model.selectedApp
+    val app = state.selectedApp
     var tab by remember { mutableStateOf(0) }
     var permission by remember(app?.packageName) { mutableStateOf("") }
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -177,8 +186,8 @@ fun AppsScreen(model: AppState) {
                     Action(
                         tr("Load apps"),
                         Icons.Outlined.Refresh,
-                        enabled && model.selectedDevice?.state == "device",
-                        onClick = model::loadApps,
+                        enabled && state.selectedDevice?.state == "device",
+                        onClick = connection::loadApps,
                     )
                 }
             }
@@ -200,12 +209,12 @@ fun AppsScreen(model: AppState) {
                             enabled = enabled,
                             primary = action == AdbAction.Start,
                         ) {
-                            model.perform(action)
+                            connection.perform(action)
                         }
                     }
                     Action(tr("Traffic"), Icons.Outlined.SwapVert) { model.page = Page.Traffic }
                     Action("Logcat", Icons.Outlined.Terminal) {
-                        model.logOptions = model.logOptions.copy(appOnly = true)
+                        model.logcat.setAppOnly(true)
                         model.page = Page.Logcat
                     }
                 }
@@ -228,7 +237,7 @@ fun AppsScreen(model: AppState) {
                                 )
                                 .forEach { action ->
                                     Action(action.title, enabled = enabled) {
-                                        model.perform(action)
+                                        connection.perform(action)
                                     }
                                 }
                         }
@@ -244,13 +253,13 @@ fun AppsScreen(model: AppState) {
                                 tr("Refresh permissions"),
                                 Icons.Outlined.Refresh,
                                 enabled,
-                                onClick = model::loadPermissions,
+                                onClick = connection::loadPermissions,
                             )
                             Action(tr("Grant"), enabled = enabled && permission.isNotBlank()) {
-                                model.perform(AdbAction.Grant, permission)
+                                connection.perform(AdbAction.Grant, permission)
                             }
                             Action(tr("Revoke"), enabled = enabled && permission.isNotBlank()) {
-                                model.perform(AdbAction.Revoke, permission)
+                                connection.perform(AdbAction.Revoke, permission)
                             }
                         }
                         Text(
@@ -261,7 +270,7 @@ fun AppsScreen(model: AppState) {
                             fontSize = 11.sp,
                         )
                         LazyColumn {
-                            items(model.permissions, key = { it.name }) { item ->
+                            items(state.permissions, key = { it.name }) { item ->
                                 Row(
                                     Modifier.fillMaxWidth()
                                         .clickable { permission = item.name }
@@ -291,7 +300,7 @@ fun AppsScreen(model: AppState) {
                     ) {
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             listOf(AdbAction.Debug, AdbAction.RestartDebug).forEach { action ->
-                                Action(action.title, enabled = enabled) { model.perform(action) }
+                                Action(action.title, enabled = enabled) { connection.perform(action) }
                             }
                         }
                     }
@@ -307,7 +316,7 @@ fun AppsScreen(model: AppState) {
                             listOf(AdbAction.Clear, AdbAction.ClearStart, AdbAction.Uninstall)
                                 .forEach { action ->
                                     Action(action.title, enabled = enabled, danger = true) {
-                                        model.perform(action)
+                                        connection.perform(action)
                                     }
                                 }
                         }
@@ -319,7 +328,9 @@ fun AppsScreen(model: AppState) {
 
 @Composable
 fun ToolsScreen(model: AppState) {
-    val enabled = model.busy.isEmpty() && model.selectedDevice?.state == "device"
+    val connection = model.connection
+    val state by connection.uiState.collectAsState()
+    val enabled = model.busy.isEmpty() && state.selectedDevice?.state == "device"
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(16.dp),
@@ -332,16 +343,16 @@ fun ToolsScreen(model: AppState) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 listOf(AdbAction.WifiOn, AdbAction.WifiOff, AdbAction.WifiSettings).forEach { action
                     ->
-                    Action(action.title, enabled = enabled) { model.perform(action) }
+                    Action(action.title, enabled = enabled) { connection.perform(action) }
                 }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 listOf(AdbAction.DataOn, AdbAction.DataOff).forEach { action ->
-                    Action(action.title, enabled = enabled) { model.perform(action) }
+                    Action(action.title, enabled = enabled) { connection.perform(action) }
                 }
             }
             Action(AdbAction.Network.title, Icons.Outlined.Lan, enabled) {
-                model.perform(AdbAction.Network)
+                connection.perform(AdbAction.Network)
             }
         }
         Panel(
@@ -351,7 +362,7 @@ fun ToolsScreen(model: AppState) {
         ) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 listOf(AdbAction.DeviceInfo, AdbAction.Processes).forEach { action ->
-                    Action(action.title, enabled = enabled) { model.perform(action) }
+                    Action(action.title, enabled = enabled) { connection.perform(action) }
                 }
             }
         }
@@ -370,9 +381,9 @@ fun ToolsScreen(model: AppState) {
                                 OutputWindow(
                                     title = "ADB push",
                                     text =
-                                        Adb(model.settings)
+                                        Adb(model.settings.uiState.value)
                                             .device(
-                                                model.serial(),
+                                                connection.serial(),
                                                 "push",
                                                 file.absolutePath,
                                                 remote,
@@ -390,9 +401,9 @@ fun ToolsScreen(model: AppState) {
                                 OutputWindow(
                                     title = "ADB pull",
                                     text =
-                                        Adb(model.settings)
+                                        Adb(model.settings.uiState.value)
                                             .device(
-                                                model.serial(),
+                                                connection.serial(),
                                                 "pull",
                                                 remote,
                                                 file.absolutePath,
@@ -411,14 +422,14 @@ fun ToolsScreen(model: AppState) {
                                 tr(
                                     "{0}\nDevice: {1}",
                                     file.absolutePath,
-                                    model.selectedDevice?.label,
+                                    state.selectedDevice?.label,
                                 ),
                             ) {
                                 model.task(tr("Installing APK")) {
                                     val result =
-                                        Adb(model.settings)
+                                        Adb(model.settings.uiState.value)
                                             .device(
-                                                model.serial(),
+                                                connection.serial(),
                                                 "install",
                                                 "-r",
                                                 file.absolutePath,

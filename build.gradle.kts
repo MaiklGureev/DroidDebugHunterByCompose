@@ -9,7 +9,7 @@ plugins {
 
 group = "ru.gureev"
 
-version = "1.1.3"
+version = "1.1.4"
 
 repositories {
     mavenCentral()
@@ -39,8 +39,14 @@ tasks.test {
     systemProperty("test.runtimeClasspath", sourceSets.test.get().runtimeClasspath.asPath)
 }
 
+val applicationVersion = version.toString()
+
 tasks.named<org.gradle.language.jvm.tasks.ProcessResources>("processResources") {
     exclude("**/__pycache__/**", "**/*.pyc", "**/*.pyo")
+    inputs.property("applicationVersion", applicationVersion)
+    doLast {
+        destinationDir.resolve("application-version.txt").writeText("$applicationVersion\n", Charsets.UTF_8)
+    }
 }
 
 compose.desktop {
@@ -53,7 +59,7 @@ compose.desktop {
             appResourcesRootDir.set(layout.projectDirectory.dir("desktop-resources"))
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
             packageName = "DroidDebugHunterByCompose"
-            packageVersion = "1.1.3"
+            packageVersion = "1.1.4"
             description = "Android debugging and traffic inspection"
             vendor = "DroidDebugHunter"
             modules("java.desktop", "java.net.http", "java.prefs", "jdk.unsupported")

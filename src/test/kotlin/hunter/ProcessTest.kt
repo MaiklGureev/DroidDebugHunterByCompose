@@ -29,6 +29,17 @@ object ProcessFixture {
                 File(args[1]).writeText(ProcessHandle.current().pid().toString())
                 Thread.sleep(120000)
             }
+            "shared-daemon-client" -> {
+                val child = ProcessBuilder(args.drop(2))
+                    .redirectOutput(ProcessBuilder.Redirect.DISCARD)
+                    .redirectError(ProcessBuilder.Redirect.DISCARD)
+                    .start()
+                val pids = File(args[1])
+                val pending = File(pids.parentFile, "pids.pending")
+                pending.writeText("${ProcessHandle.current().pid()}\n${child.pid()}\n")
+                check(pending.renameTo(pids))
+                Thread.sleep(120000)
+            }
             "stop" -> {
                 println("ready")
                 System.out.flush()
@@ -128,6 +139,28 @@ class ProcessTest {
         val pid = file.readText().toLong()
         withTimeout(6000) { job.cancelAndJoin() }
         assertFalse(ProcessHandle.of(pid).map { it.isAlive }.orElse(false))
+    }
+
+    @Test
+    fun `cancelling an adb-like client preserves the shared daemon`(@TempDir directory: Path) = runBlocking {
+        val pids = directory.resolve("pids.txt").toFile()
+        val daemonReady = directory.resolve("daemon.txt").toFile()
+        val task = launch(Dispatchers.Default) {
+            Processes.run(
+                command("shared-daemon-client", pids.path, *command("sleep", daemonReady.path).toTypedArray()),
+                terminateDescendants = false,
+            )
+        }
+        try {
+            withTimeout(10000) { while (!pids.isFile || daemonReady.length() == 0L) delay(30) }
+            val (client, daemon) = pids.readLines().map(String::toLong)
+            withTimeout(6000) { task.cancelAndJoin() }
+            assertFalse(ProcessHandle.of(client).map { it.isAlive }.orElse(false))
+            assertTrue(ProcessHandle.of(daemon).map { it.isAlive }.orElse(false))
+        } finally {
+            task.cancelAndJoin()
+            if (pids.isFile) ProcessHandle.of(pids.readLines().last().toLong()).ifPresent { it.destroyForcibly() }
+        }
     }
 
     @Test

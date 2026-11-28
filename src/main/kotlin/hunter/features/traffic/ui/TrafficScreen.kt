@@ -2,6 +2,7 @@
 
 package hunter.features.traffic.ui
 
+import androidx.compose.desktop.ui.tooling.preview.Preview
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.*
@@ -10,6 +11,13 @@ import androidx.compose.material.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material.icons.outlined.*
+import androidx.compose.material3.Button as MaterialButton
+import androidx.compose.material3.ButtonDefaults as MaterialButtonDefaults
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon as MaterialIcon
+import androidx.compose.material3.MaterialTheme as Material3Theme
+import androidx.compose.material3.Surface as MaterialSurface
+import androidx.compose.material3.Text as MaterialText
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -21,10 +29,13 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import hunter.app.AppState
+import hunter.app.Page
 import hunter.core.tr
 import hunter.features.android.ui.AppPicker
+import hunter.features.traffic.CaptureMode
 import hunter.features.traffic.Curl
 import hunter.features.traffic.Exchange
+import hunter.features.traffic.TrafficAppFilter
 import hunter.ui.Accent
 import hunter.ui.Action
 import hunter.ui.Amber
@@ -32,11 +43,13 @@ import hunter.ui.Choice
 import hunter.ui.EmptyState
 import hunter.ui.Field
 import hunter.ui.Green
+import hunter.ui.HunterTheme
 import hunter.ui.Line
 import hunter.ui.MiniIcon
 import hunter.ui.Muted
 import hunter.ui.Pill
 import hunter.ui.Red
+import hunter.ui.ToolAction
 import hunter.ui.chooseFile
 import hunter.ui.copyText
 import kotlinx.coroutines.Dispatchers
@@ -59,13 +72,24 @@ fun TrafficScreen(model: AppState) {
     var identity by remember { mutableStateOf("") }
     var selectedId by remember { mutableStateOf<String?>(null) }
     var sort by remember { mutableStateOf(TrafficSort.Newest) }
-    val snapshot = model.exchanges.toList()
-    val visible by
-        produceState(emptyList<Exchange>(), snapshot, query, pkg, identity, sort) {
+    val traffic = model.traffic
+    val connectionState by model.connection.uiState.collectAsState()
+    val state by traffic.uiState.collectAsState()
+    val capture = state.capture
+    val mode = capture?.mode ?: connectionState.mode
+    val targetApp = if (mode.capturesSingleApp) capture?.app ?: connectionState.selectedApp else null
+    val targetFilter = targetApp?.let {
+        TrafficAppFilter(it.packageName, capture?.serial ?: connectionState.selectedDevice?.serial, it.uid)
+    }
+    var onlySelectedApp by remember(targetFilter) { mutableStateOf(true) }
+    val appFilter = targetFilter.takeIf { onlySelectedApp }
+    val snapshot = state.exchanges
+    val visible = key(appFilter) {
+        val result by produceState(emptyList<Exchange>(), snapshot, query, pkg, identity, sort) {
             value =
                 withContext(Dispatchers.Default) {
                     snapshot
-                        .filter { it.matches(query, pkg, identity) }
+                        .filter { (appFilter == null || appFilter.matches(it)) && it.matches(query, pkg, identity) }
                         .let { entries ->
                             when (sort) {
                                 TrafficSort.Oldest -> entries.sortedBy { it.instant }
@@ -77,10 +101,12 @@ fun TrafficScreen(model: AppState) {
                         }
                 }
         }
-    val selected = snapshot.firstOrNull { it.id == selectedId }
+        result
+    }
+    val selected = visible.firstOrNull { it.id == selectedId }
     val enabled = model.busy.isEmpty() && model.initialized
     fun openDetails(e: Exchange) {
-        if (e.id !in model.detailIds) model.detailIds += e.id
+        traffic.openDetails(e.id)
     }
     fun copyCurl() {
         if (selected != null)
@@ -91,27 +117,19 @@ fun TrafficScreen(model: AppState) {
             }
     }
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Surface(shape = RoundedCornerShape(10.dp), border = BorderStroke(1.dp, Line)) {
-            Row(
-                Modifier.padding(14.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                AppPicker(model, Modifier.weight(1f), enabled && !model.capturing)
-                Action(
-                    when {
-                        model.capturing -> tr("Stop")
-                        model.selectedDevice?.state != "device" -> tr("Set up connection")
-                        else -> tr("Start capture")
-                    },
-                    if (model.capturing) Icons.Outlined.Stop else Icons.Outlined.PlayArrow,
-                    enabled,
-                    primary = true,
-                    danger = model.capturing,
-                    onClick = model::toggleCapture,
-                )
-            }
-        }
+        TrafficCaptureBar(
+            mode = mode,
+            running = state.running,
+            connected = connectionState.selectedDevice?.state == "device",
+            appLabel = targetApp?.label,
+            enabled = enabled,
+            toggle = model::toggleCapture,
+            configureSingleApp = {
+                model.connection.setMode(CaptureMode.Vpn)
+                model.page = Page.Connection
+            },
+            appPicker = { AppPicker(model, it, enabled && connectionState.selectedDevice?.state == "device") },
+        )
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -128,6 +146,7 @@ fun TrafficScreen(model: AppState) {
                 query = ""
                 pkg = ""
                 identity = ""
+                onlySelectedApp = false
             }
         }
         Row(
@@ -140,17 +159,24 @@ fun TrafficScreen(model: AppState) {
                 color = Muted,
                 modifier = Modifier.weight(1f),
             )
+            if (targetFilter != null) {
+                FilterChip(
+                    selected = onlySelectedApp,
+                    onClick = { onlySelectedApp = !onlySelectedApp },
+                    label = { MaterialText(tr("Selected app only")) },
+                )
+            }
             Choice(sort, TrafficSort.entries, { it.label }, { sort = it }, Modifier.width(145.dp))
             Action(tr("Import HAR"), Icons.Outlined.FileOpen, enabled) {
-                chooseFile(title = tr("Import HAR"))?.let(model::importHar)
+                chooseFile(title = tr("Import HAR"))?.let(traffic::importHar)
             }
             Action(tr("Export HAR"), Icons.Outlined.FileDownload, enabled && visible.isNotEmpty()) {
                 chooseFile(true, "traffic.har", extension = "har")?.let {
-                    model.saveHar(it, visible.toList())
+                    traffic.saveHar(it, visible.toList())
                 }
             }
             MiniIcon(Icons.Outlined.DeleteOutline, tr("Clear list"), enabled) {
-                model.clearTraffic()
+                traffic.clear()
                 selectedId = null
             }
         }
@@ -177,15 +203,20 @@ fun TrafficScreen(model: AppState) {
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         EmptyState(
                             Icons.Outlined.SwapVert,
-                            if (snapshot.isEmpty()) tr("Traffic will appear here")
-                            else tr("No matches"),
-                            if (snapshot.isEmpty())
-                                tr("Start capture from Android or open a HAR file.")
-                            else tr("Change the search or reset filters."),
+                            when {
+                                snapshot.isEmpty() -> tr("Traffic will appear here")
+                                appFilter != null -> tr("No matches for the selected app")
+                                else -> tr("No matches")
+                            },
+                            when {
+                                snapshot.isEmpty() -> tr("Start capture from Android or open a HAR file.")
+                                appFilter != null -> tr("Change the search or turn off Selected app only.")
+                                else -> tr("Change the search or reset filters.")
+                            },
                         ) {
                             if (snapshot.isEmpty())
                                 Action(tr("Open HAR"), Icons.Outlined.FileOpen) {
-                                    chooseFile(title = tr("Import HAR"))?.let(model::importHar)
+                                    chooseFile(title = tr("Import HAR"))?.let(traffic::importHar)
                                 }
                         }
                     }
@@ -314,11 +345,91 @@ fun TrafficScreen(model: AppState) {
                 selected?.let { copyText(model, it.url) }
             }
             Spacer(Modifier.weight(1f))
-            if (model.evictedRequests > 0)
-                Text(tr("Evicted: {0}", model.evictedRequests), color = Amber, fontSize = 11.sp)
-            if (model.capturing) Pill("● LIVE")
+            if (state.evictedRequests > 0)
+                Text(tr("Evicted: {0}", state.evictedRequests), color = Amber, fontSize = 11.sp)
+            if (state.running) Pill("● LIVE")
         }
     }
+}
+
+@Composable
+private fun TrafficCaptureBar(
+    mode: CaptureMode,
+    running: Boolean,
+    connected: Boolean,
+    appLabel: String?,
+    enabled: Boolean,
+    toggle: () -> Unit,
+    configureSingleApp: () -> Unit,
+    appPicker: @Composable (Modifier) -> Unit,
+) {
+    val scheme = Material3Theme.colorScheme
+    MaterialSurface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = Material3Theme.shapes.medium,
+        border = BorderStroke(1.dp, scheme.outlineVariant),
+    ) {
+        Row(
+            Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            if (mode.capturesSingleApp && !running) {
+                appPicker(Modifier.weight(1f))
+            } else {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    MaterialText(
+                        appLabel ?: tr("System proxy · All apps"),
+                        style = Material3Theme.typography.titleSmall,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    MaterialText(
+                        if (mode.capturesSingleApp) mode.title
+                        else tr("Requests sent through the system proxy have no app or UID information."),
+                        style = Material3Theme.typography.bodySmall,
+                        color = scheme.onSurfaceVariant,
+                    )
+                }
+            }
+            if (running) {
+                MaterialButton(
+                    toggle,
+                    enabled = enabled,
+                    colors = MaterialButtonDefaults.buttonColors(containerColor = scheme.error, contentColor = scheme.onError),
+                ) {
+                    MaterialIcon(Icons.Outlined.Stop, null, Modifier.size(16.dp))
+                    Spacer(Modifier.width(8.dp))
+                    MaterialText(tr("Stop"))
+                }
+            } else {
+                if (!mode.capturesSingleApp) {
+                    ToolAction(tr("Set up WireGuard for one app"), Icons.Outlined.VpnKey, enabled, onClick = configureSingleApp)
+                }
+                ToolAction(
+                    tr(if (connected) "Start capture" else "Set up connection"),
+                    Icons.Outlined.PlayArrow,
+                    enabled && (!connected || !mode.capturesSingleApp || appLabel != null),
+                    primary = true,
+                    onClick = toggle,
+                )
+            }
+        }
+    }
+}
+
+@Preview
+@Composable
+private fun ProxyCaptureBarPreview() = HunterTheme(dark = false) {
+    TrafficCaptureBar(CaptureMode.Proxy, running = false, connected = true, appLabel = null,
+        enabled = true, toggle = {}, configureSingleApp = {}, appPicker = {})
+}
+
+@Preview
+@Composable
+private fun ActiveAppCaptureBarPreview() = HunterTheme(dark = true) {
+    TrafficCaptureBar(CaptureMode.Vpn, running = true, connected = true, appLabel = "Example app",
+        enabled = true, toggle = {}, configureSingleApp = {}, appPicker = {})
 }
 
 @Composable

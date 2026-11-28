@@ -19,7 +19,20 @@ JDK 17 is needed only for development, Gradle, tests and packaging. `gradlew run
 | macOS Intel | Same macOS data directory | `desktop-resources/macos-x64/tools/` |
 | Linux x64 | `$XDG_DATA_HOME/DroidDebugHunterCompose` or `~/.local/share/DroidDebugHunterCompose` | `desktop-resources/linux-x64/tools/` |
 
-ARM64 hosts use `windows-arm64` / `linux-arm64` directories, but compatible tools/wheels need separate verification; these are not currently published release targets. If official Linux ADB does not match your CPU, install native ADB from the distribution and configure its path.
+Published Windows and Linux packages target x64. Local ARM64 builds use `windows-arm64` or `linux-arm64` directories. The Google Platform Tools ZIP for macOS works on both Intel and Apple Silicon. The Google Linux ZIP contains x86-64 ADB. On Linux ARM64, use your distribution’s native `adb` package (for example, [Debian ARM64](https://packages.debian.org/trixie/arm64/adb)), then configure the executable path on **Connection**, or select a compatible local ZIP.
+
+The app selects `uv` for the host OS and CPU. Python installs wheels for the selected interpreter, including the compatible `argon2-cffi-bindings` build on Intel Macs. Frida Server and Gadget use the Android device’s ABI.
+
+### mitmproxy on Intel Macs
+
+PyPI has no Intel macOS wheel for the target `cryptography` version. With the same Intel Python configured in the app, supply a compatible `cryptography==50.0.2` wheel or try building it from source with the [upstream macOS build prerequisites](https://cryptography.io/en/50.0.2/installation/#building-cryptography-on-macos).
+
+```sh
+python3 -m pip wheel --no-deps --no-binary cryptography \
+  --wheel-dir /path/to/tools/downloads/wheelhouse/proxy 'cryptography==50.0.2'
+```
+
+If you set a separate download cache, use its `wheelhouse/proxy` subfolder. Retry proxy preparation on **Connection**. It reads this folder on Intel macOS in online and offline modes. Offline preparation also needs the remaining wheels in that folder.
 
 Packaged bundles are read from the app's `tools/` resources. You can select any accessible directory when no bundle exists. Tool paths are saved separately by OS/CPU; old Windows settings migrate only on Windows. UI settings, including interface language, are shared between platform profiles. Settings → Interface language switches English/Russian immediately and saves the choice for subsequent launches. Without a saved choice, ru system locales use Russian and other locales use English.
 
@@ -71,12 +84,12 @@ Windows:
 .\run.ps1 -Task packageMsi
 ```
 
-Output: `build/compose/binaries-1.1.3/main/app/`. Only host OS/CPU tools are bundled. Without tools, the app still provides HAR analysis and external-tool configuration.
+Output: `build/compose/binaries-1.1.4/main/app/`. Only host OS/CPU tools are bundled. Without tools, the app still provides HAR analysis and external-tool configuration.
 
 Check Windows with system Java paths disabled:
 
 ```powershell
-.\scripts\smoke_windows.ps1 -ApplicationRoot .\build\compose\binaries-1.1.3\main\app\DroidDebugHunterByCompose
+.\scripts\smoke_windows.ps1 -ApplicationRoot .\build\compose\binaries-1.1.4\main\app\DroidDebugHunterByCompose
 ```
 
 On macOS/Linux: `python3 scripts/package_release.py --runtime-check`. These checks verify private Java, device selection and shutdown using isolated data. They do not require uninstalling the developer JDK or connecting Android.

@@ -12,6 +12,8 @@ import java.net.URI
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import java.nio.file.FileVisitResult
 import java.nio.file.Files
 import java.nio.file.Path
@@ -84,10 +86,11 @@ object ToolDownloads {
         destination: File,
         expected: String?,
         offline: Boolean,
+        refresh: Boolean = false,
         progress: (SetupProgress) -> Unit,
     ): File =
         withContext(Dispatchers.IO) {
-            if (destination.isFile && (expected == null || digest(destination) == expected)) {
+            if (destination.isFile && (!refresh || offline) && (expected == null || digest(destination) == expected)) {
                 progress(SetupProgress(tr("Using cached download"), destination.absolutePath))
                 return@withContext destination
             }
@@ -316,36 +319,57 @@ object ToolDownloads {
         )
     }
 
+    internal const val ADB_HEADER_BYTES = 8 + 32 * 16
+
+    internal fun adbBinaryMatches(bytes: ByteArray, platform: HostPlatform): Boolean {
+        if (bytes.size < 20) return false
+        val header = ByteBuffer.wrap(bytes)
+        val arm64 = platform.arch == "arm64"
+        return when (platform.os) {
+            HostOs.Windows -> header.getShort(0).toInt() == 0x4d5a
+            HostOs.Linux -> header.getInt(0) == 0x7f454c46 &&
+                bytes[4] == 2.toByte() && bytes[5] == 1.toByte() &&
+                header.order(ByteOrder.LITTLE_ENDIAN).getShort(18).toInt() == (if (arm64) 183 else 62)
+            HostOs.MacOS -> {
+                val cpu = if (arm64) 0x0100000c else 0x01000007
+                val magic = header.getInt(0).toUInt()
+                if (magic in setOf(0xcffaedfeu, 0xbebafecau, 0xbfbafecau)) header.order(ByteOrder.LITTLE_ENDIAN)
+                when (header.getInt(0).toUInt()) {
+                    0xfeedfacfu -> header.getInt(4) == cpu
+                    0xcafebabeu, 0xcafebabfu -> {
+                        val recordSize = if (header.getInt(0).toUInt() == 0xcafebabfu) 32 else 20
+                        val count = header.getInt(4)
+                        count in 1..16 && bytes.size >= 8 + count * recordSize &&
+                            (0 until count).any { header.getInt(8 + it * recordSize) == cpu }
+                    }
+                    else -> false
+                }
+            }
+        }
+    }
+
     suspend fun installAdb(config: Settings, progress: (SetupProgress) -> Unit): String =
         withContext(Dispatchers.IO) {
             val platform = HostPlatform.current
             val version = config.setup.version("adb")
-            val suffix =
-                when (platform.os) {
-                    HostOs.Windows -> "win"
-                    HostOs.MacOS -> "darwin"
-                    HostOs.Linux -> "linux"
-                }
-            val name = "platform-tools_r$version-$suffix.zip"
-            val cache =
-                File(config.setup.cache.ifBlank { File(config.tools, "downloads").absolutePath })
-            val expected =
-                if (version == ToolPolicy.target("adb"))
-                    ToolPolicy.catalog.getAsJsonObject("adbSha256").get(platform.os.id).asString
-                else null
             val archive =
                 if (config.setup.adbArchive.isNotBlank())
                     File(config.setup.adbArchive).also {
                         require(it.isFile) { tr("File not found: {0}", it.path) }
                     }
-                else
+                else {
+                    val source = ToolLayout.adbSource(config.setup, platform)
+                    val name = URI(source.url).path.substringAfterLast('/')
+                    val cache = File(config.setup.cache.ifBlank { File(config.tools, "downloads").absolutePath })
                     download(
-                        "https://dl.google.com/android/repository/$name",
+                        source.url,
                         File(cache, "adb/$name"),
-                        expected,
+                        ToolLayout.adbChecksum(config.setup, platform),
                         config.setup.offline,
-                        progress,
+                        refresh = config.setup.adbLatest,
+                        progress = progress,
                     )
+                }
             progress(SetupProgress(tr("Unpacking and validating ADB"), archive.absolutePath))
             val output = File(config.tools, "platform-tools")
             val context = currentCoroutineContext()
@@ -361,26 +385,8 @@ object ToolDownloads {
                     require(File(tools, it).isFile) { "Missing Platform Tools file: $it" }
                 }
                 val binary = File(tools, platform.executable("adb"))
-                val header = binary.inputStream().use { it.readNBytes(20) }
-                require(
-                    header.size == 20 &&
-                        when (platform.os) {
-                            HostOs.Windows -> header[0] == 77.toByte() && header[1] == 90.toByte()
-                            HostOs.Linux ->
-                                header.take(4) ==
-                                    listOf(127.toByte(), 69.toByte(), 76.toByte(), 70.toByte()) &&
-                                    ((header[18].toInt() and 255) or
-                                        ((header[19].toInt() and 255) shl 8)) ==
-                                        if (platform.arch == "arm64") 183 else 62
-                            HostOs.MacOS ->
-                                header.take(4).map { it.toInt() and 255 } in
-                                    listOf(
-                                        listOf(202, 254, 186, 190),
-                                        listOf(207, 250, 237, 254),
-                                        listOf(202, 254, 186, 191),
-                                    )
-                        }
-                ) {
+                val header = binary.inputStream().use { it.readNBytes(ADB_HEADER_BYTES) }
+                require(adbBinaryMatches(header, platform)) {
                     tr(
                         "ADB binary does not match this OS/CPU; configure a native ADB path instead."
                     )
@@ -394,7 +400,10 @@ object ToolDownloads {
                         .find(File(tools, "source.properties").readText())
                         ?.groupValues
                         ?.get(1)
-                require(revision == version) {
+                require(revision != null && ToolPolicy.validVersion(revision)) {
+                    tr("Platform Tools archive has no valid revision")
+                }
+                require(config.setup.adbLatest || revision == version) {
                     tr(
                         "Archive version is {0}; selected {1}. Choose that version or another archive.",
                         revision,

@@ -2,7 +2,7 @@
 
 **English** | [Русский](DOWNLOADS.md)
 
-HAR analysis needs no external tools. Java is included in native packages. ADB is needed for devices; Python and mode-specific packages are needed for capture. Use **Download and prepare** for ADB and **Prepare capture tools** for the current capture method. Normal startup downloads nothing.
+HAR analysis needs no external tools. Java is included in native packages. Devices need ADB, and capture uses Python and mode-specific packages. Use **Download and prepare** for individual tools or **Prepare missing tools** for the selected capture method. Normal startup downloads nothing.
 
 ## Target versions and alternatives
 
@@ -26,7 +26,9 @@ The reference configuration is recorded in `tool-setup/tool-versions.json` (revi
 On **Connection**, each tool shows its status, detected version, download version, bundle folder and local options. ADB is shared across USB, Wi-Fi and Emulator. Use **Change download version** to edit a tool's download version. Tools that include multiple packages have a field for each version in the same dialog. Choose the Python executable and method in the Python section. The shared tool directory and download cache are always visible.
 
 - **Manual download:** open the component's sources, copy links and follow the placement instructions. Use **Check tools** after placing files or saving an executable path.
-- **Download and prepare** downloads and prepares one component in the selected folder. **Prepare capture tools** prepares the tools required by the current capture method.
+- **Download and prepare** downloads and prepares one component in the selected folder. **Prepare missing tools** skips working components. Working versions remain visible with compatibility warnings where applicable. To request a different version, edit the download version and then use **Download and prepare**.
+
+For **ADB** on Windows, macOS, or Linux x86-64, open **Change download version** and select **Latest from Google**. **Download and prepare** in that dialog installs the current Google ZIP in the tool bundle and shows the detected revision. Return to the dialog to update an installed copy, or use **Specific version** to stay on a chosen revision. On Linux ARM64, configure a native `adb` from your distribution, or select a compatible local ZIP and click **Prepare local ZIP**. [Android Platform Tools downloads](https://developer.android.com/tools/releases/platform-tools) · [Platform guide](PLATFORMS.en.md)
 
 If a component fails, independent steps continue. For example, WireGuard can be prepared even when Python is unavailable. Steps with missing prerequisites are marked **Skipped**. To retry ADB, use its own download button. For capture tools, use **Retry unfinished components**.
 
@@ -50,7 +52,7 @@ The setup area shows the current stage and a live log. Direct file downloads sho
 
 ## Offline preparation
 
-Enable **Offline** and choose a cache folder. Optional **Local Platform Tools ZIP** imports an archive directly. Set the archive's revision in the ADB software block. A local uv executable can also be selected.
+Enable **Offline** and choose a cache folder. Optional **Local Platform Tools ZIP** imports an archive directly and takes priority over the cache and network. Select its revision under **Specific version** or use **Latest from Google** to accept the archive's recorded revision. In offline mode, **Latest from Google** uses the matching `platform-tools-latest-*.zip` in `downloads/adb/` or in the chosen cache. A local uv executable can also be selected.
 
 Cache layout:
 

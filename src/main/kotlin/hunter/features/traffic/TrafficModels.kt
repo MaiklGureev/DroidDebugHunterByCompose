@@ -131,6 +131,12 @@ data class Exchange(
     }
 }
 
+internal data class TrafficAppFilter(val packageName: String, val serial: String?, val uid: Int?) {
+    fun matches(exchange: Exchange): Boolean = exchange.packageName == packageName &&
+        (serial == null || exchange.serial.isBlank() || exchange.serial == serial) &&
+        (uid == null || exchange.uid.isBlank() || exchange.uid == uid.toString())
+}
+
 enum class CurlShell(val title: String) {
     PowerShell("PowerShell 7.3+"),
     Posix("sh / bash / zsh");

@@ -41,8 +41,9 @@ import hunter.ui.Muted
 import hunter.ui.Pill
 import hunter.ui.Red
 import hunter.ui.chooseFile
-import hunter.ui.isDarkTheme
 import hunter.ui.isPlatformShortcutPressed
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 
 fun Page.icon(): ImageVector =
     when (this) {
@@ -59,7 +60,11 @@ fun Page.icon(): ImageVector =
 @Composable
 fun HunterApp(model: AppState, closing: Boolean) {
     var journalVisible by remember { mutableStateOf(false) }
-    val dark = model.settings.isDarkTheme()
+    val dark = !MaterialTheme.colors.isLight
+    val connection = model.connection
+    val connectionState by connection.uiState.collectAsState()
+    val capturing by model.traffic.running.collectAsState(model.traffic.uiState.value.running)
+    val logging by model.logcat.running.collectAsState(model.logcat.uiState.value.running)
     Surface(color = MaterialTheme.colors.background) {
         Column(
             Modifier.fillMaxSize()
@@ -76,7 +81,7 @@ fun HunterApp(model: AppState, closing: Boolean) {
                                 true
                             }
                             event.isPlatformShortcutPressed && event.key == Key.O -> {
-                                chooseFile(title = tr("Import HAR"))?.let(model::importHar)
+                                chooseFile(title = tr("Import HAR"))?.let(model.traffic::importHar)
                                 true
                             }
                             else -> false
@@ -123,13 +128,13 @@ fun HunterApp(model: AppState, closing: Boolean) {
                             NavigationItem(it, model.page == it) { model.page = it }
                         }
                         Spacer(Modifier.weight(1f))
-                        if (model.capturing || model.logging)
+                        if (capturing || logging)
                             Column(
                                 Modifier.padding(10.dp),
                                 verticalArrangement = Arrangement.spacedBy(6.dp),
                             ) {
-                                if (model.capturing) Pill(tr("●  Capture active"))
-                                if (model.logging) Pill(tr("●  Logcat recording"), Accent)
+                                if (capturing) Pill(tr("●  Capture active"))
+                                if (logging) Pill(tr("●  Logcat recording"), Accent)
                             }
                         NavigationItem(Page.Settings, model.page == Page.Settings) {
                             model.page = Page.Settings
@@ -153,9 +158,7 @@ fun HunterApp(model: AppState, closing: Boolean) {
                                 else Icons.Outlined.DarkMode,
                                 tr("Switch theme"),
                             ) {
-                                model.updateSettings(
-                                    model.settings.copy(dark = !dark, followSystemTheme = false)
-                                )
+                                model.settings.setDarkTheme(!dark)
                             }
                         }
                     }
@@ -179,19 +182,19 @@ fun HunterApp(model: AppState, closing: Boolean) {
                             if (model.page != Page.Connection && model.page != Page.Traffic) {
                                 Box(Modifier.widthIn(max = 410.dp).weight(.75f)) {
                                     Choice(
-                                        model.selectedDevice,
-                                        model.devices.map { it as Device? },
+                                        connectionState.selectedDevice,
+                                        connectionState.devices.map { it as Device? },
                                         { it?.label ?: tr("Select a device") },
-                                        { it?.let(model::selectDevice) },
+                                        { it?.let(connection::selectDevice) },
                                         enabled = model.busy.isEmpty(),
                                     )
                                 }
                                 MiniIcon(
                                     Icons.Outlined.Refresh,
                                     tr("Refresh devices"),
-                                    !model.refreshing && model.busy.isEmpty(),
+                                    !connectionState.refreshing && model.busy.isEmpty(),
                                 ) {
-                                    model.task(tr("Refreshing devices")) { model.refreshDevices(true) }
+                                    connection.refresh()
                                 }
                             }
                             MiniIcon(Icons.Outlined.Search, tr("Commands · Ctrl+K")) {
@@ -264,7 +267,10 @@ fun HunterApp(model: AppState, closing: Boolean) {
                 ) {
                     if (model.busy.isNotEmpty() || closing) {
                         CircularProgressIndicator(Modifier.size(13.dp), strokeWidth = 2.dp)
-                        val progress = model.setupProgress
+                        val toolState = model.toolSetup.uiState
+                        val progress by remember(toolState) {
+                            toolState.map { it.progress }.distinctUntilChanged()
+                        }.collectAsState(toolState.value.progress)
                         val caption =
                             if (closing) tr("Closing sessions…")
                             else

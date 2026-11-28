@@ -20,12 +20,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import hunter.app.AppState
 import hunter.app.OutputWindow
-import hunter.core.AppFiles
 import hunter.core.tr
 import hunter.features.android.Device
 import hunter.features.android.ui.AppPicker
 import hunter.features.logcat.LogEntry
-import hunter.features.logcat.LogExport
 import hunter.features.logcat.LogFilter
 import hunter.ui.Accent
 import hunter.ui.Action
@@ -57,7 +55,10 @@ fun LogcatScreen(model: AppState) {
     var ctrl by remember { mutableStateOf(false) }
     var shift by remember { mutableStateOf(false) }
     var export by remember { mutableStateOf<List<LogEntry>?>(null) }
-    val snapshot = model.logs.toList()
+    val logcat = model.logcat
+    val connectionState by model.connection.uiState.collectAsState()
+    val state by logcat.uiState.collectAsState()
+    val snapshot = state.entries
     val filtered by
         produceState(Pair(emptyList<LogEntry>(), ""), snapshot, filter) {
             delay(70)
@@ -124,17 +125,17 @@ fun LogcatScreen(model: AppState) {
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    Check(tr("App (UID)"), model.logOptions.appOnly, enabled && !model.logging) {
-                        model.logOptions = model.logOptions.copy(appOnly = it)
+                    Check(tr("App (UID)"), state.options.appOnly, enabled && !state.running) {
+                        logcat.setAppOnly(it)
                     }
-                    AppPicker(model, Modifier.weight(1f), enabled && !model.logging)
+                    AppPicker(model, Modifier.weight(1f), enabled && !state.running)
                     Action(
-                        if (model.logging) tr("Stop") else tr("Start recording"),
-                        if (model.logging) Icons.Outlined.Stop else Icons.Outlined.PlayArrow,
-                        enabled && (model.logging || model.selectedDevice?.state == "device"),
+                        if (state.running) tr("Stop") else tr("Start recording"),
+                        if (state.running) Icons.Outlined.Stop else Icons.Outlined.PlayArrow,
+                        enabled && (state.running || connectionState.selectedDevice?.state == "device"),
                         primary = true,
-                        danger = model.logging,
-                        onClick = model::toggleLogcat,
+                        danger = state.running,
+                        onClick = logcat::toggle,
                     )
                 }
                 Row(
@@ -143,7 +144,7 @@ fun LogcatScreen(model: AppState) {
                 ) {
                     Text(tr("Buffers"), fontSize = 11.sp, color = Muted)
                     Choice(
-                        model.logOptions.buffer,
+                        state.options.buffer,
                         listOf(
                             "main + system + crash",
                             "all",
@@ -154,18 +155,18 @@ fun LogcatScreen(model: AppState) {
                             "radio",
                         ),
                         { it },
-                        { model.logOptions = model.logOptions.copy(buffer = it) },
+                        logcat::setBuffer,
                         Modifier.width(210.dp),
-                        enabled && !model.logging,
+                        enabled && !state.running,
                     )
                     Text(tr("History"), fontSize = 11.sp, color = Muted)
                     Choice(
-                        model.logOptions.history,
+                        state.options.history,
                         listOf(100, 500, 2000, 5000),
                         { tr("{0} rows", it) },
-                        { model.logOptions = model.logOptions.copy(history = it) },
+                        logcat::setHistory,
                         Modifier.width(120.dp),
-                        enabled && !model.logging,
+                        enabled && !state.running,
                     )
                     Spacer(Modifier.weight(1f))
                     Check(tr("Auto-scroll"), autoScroll) { autoScroll = it }
@@ -395,25 +396,25 @@ fun LogcatScreen(model: AppState) {
         ) {
             Action(tr("Copy"), Icons.Outlined.ContentCopy, selected.isNotEmpty()) { copySelected() }
             Action(tr("Export"), Icons.Outlined.FileDownload, snapshot.isNotEmpty()) {
-                export = snapshot.toList()
+                export = snapshot
             }
             MiniIcon(Icons.Outlined.DeleteOutline, tr("Clear window")) {
-                model.clearLogs()
+                logcat.clear()
                 selected = emptySet()
             }
             Spacer(Modifier.weight(1f))
             Text(
-                tr("{0} / {1} · received {2}", visible.size, snapshot.size, model.receivedLogs),
+                tr("{0} / {1} · received {2}", visible.size, snapshot.size, state.received),
                 fontSize = 10.sp,
                 color = Muted,
             )
-            if (model.evictedLogs > 0 || model.droppedLogs > 0)
+            if (state.evicted > 0 || state.dropped > 0)
                 Text(
-                    tr("Evicted {0} · dropped {1}", model.evictedLogs, model.droppedLogs),
+                    tr("Evicted {0} · dropped {1}", state.evicted, state.dropped),
                     fontSize = 10.sp,
                     color = Amber,
                 )
-            if (model.logging) Pill("● LIVE", Accent)
+            if (state.running) Pill("● LIVE", Accent)
         }
     }
     export?.let { frozen ->
@@ -456,16 +457,7 @@ fun LogcatScreen(model: AppState) {
                     export = null
                     chooseFile(true, "logcat.${format.lowercase()}", extension = format.lowercase())
                         ?.let { file ->
-                            model.task(tr("Export Logcat")) {
-                                val result =
-                                    withContext(Dispatchers.Default) {
-                                        LogExport.write(entries, format)
-                                    }
-                                withContext(Dispatchers.IO) {
-                                    AppFiles.atomicWrite(file, result.toByteArray(Charsets.UTF_8))
-                                }
-                                model.status = tr("Exported {0} rows", entries.size)
-                            }
+                            logcat.export(file, entries, format)
                         }
                 }) {
                     Text(tr("Save"))

@@ -12,7 +12,7 @@ on:
   workflow_dispatch:
 
 env:
-  RELEASE_TAG: v1.1.3
+  RELEASE_TAG: v1.1.4
 
 permissions:
   contents: read
@@ -78,7 +78,7 @@ jobs:
       - name: Verify Windows bundled runtime
         if: runner.os == 'Windows'
         shell: pwsh
-        run: ./scripts/smoke_windows.ps1 -ApplicationRoot ./build/compose/binaries-1.1.3/main/app/DroidDebugHunterByCompose
+        run: ./scripts/smoke_windows.ps1 -ApplicationRoot ./build/compose/binaries-1.1.4/main/app/DroidDebugHunterByCompose
       - name: Verify Unix bundled runtime
         if: runner.os != 'Windows'
         shell: bash
@@ -110,7 +110,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     concurrency:
-      group: publish-v1.1.3
+      group: publish-v1.1.4
       cancel-in-progress: false
     permissions:
       contents: write
@@ -131,7 +131,7 @@ jobs:
           if gh release view "$RELEASE_TAG" --json isDraft --jq .isDraft > build/release-exists.txt; then
             test "$(cat build/release-exists.txt)" = true || { echo 'Release already published; refusing to replace it.'; exit 1; }
           else
-            gh release create "$RELEASE_TAG" --target "$RELEASE_SHA" --draft --title "DroidDebugHunter 1.1.3" --notes-file docs/releases/1.1.3.md
+            gh release create "$RELEASE_TAG" --target "$RELEASE_SHA" --draft --title "DroidDebugHunter 1.1.4" --notes-file docs/releases/1.1.4.md
           fi
           gh release upload "$RELEASE_TAG" build/release-assets/* --clobber
           gh release edit "$RELEASE_TAG" --draft=false --latest

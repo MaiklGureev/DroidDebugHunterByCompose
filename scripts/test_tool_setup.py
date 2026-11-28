@@ -94,6 +94,25 @@ class ToolSetupTest(unittest.TestCase):
         self.assertEqual(previous.read_text(), 'keep')
         self.assertFalse(any(p.name.startswith('.ddhc-pip-') for p in self.root.iterdir()))
 
+    def test_intel_mac_proxy_can_mix_local_wheels_and_pypi(self):
+        cache = self.root / 'cache'
+        wheelhouse = cache / 'wheelhouse/proxy'
+        wheelhouse.mkdir(parents=True)
+
+        def run(args, **kwargs):
+            if '--target' in args:
+                Path(args[args.index('--target') + 1]).mkdir()
+
+        with patch.object(self.setup, 'host_key', return_value=('macos', 'x64')), \
+                patch.object(self.setup.subprocess, 'run', side_effect=run) as execute, \
+                patch.object(self.setup.sys, 'version_info', (3, 14)), contextlib.redirect_stdout(io.StringIO()):
+            self.setup.install_packages(self.root, 'proxy', self.setup.POLICY, False, cache)
+
+        install = execute.call_args_list[0].args[0]
+        self.assertEqual(install[install.index('--find-links') + 1], str(wheelhouse))
+        self.assertNotIn('--no-index', install)
+        self.assertIn('--only-binary=:all:', install)
+
     def test_local_wireguard_version_is_selectable_offline(self):
         module = load('prepare_extra_tools')
         source = self.root / 'local.apk'

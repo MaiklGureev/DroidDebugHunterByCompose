@@ -7,22 +7,38 @@ from pathlib import Path, PurePosixPath
 import platform
 import shutil
 import stat
+import struct
 import tempfile
 import urllib.request
 import zipfile
 from tool_support import POLICY, version as validate_version, copy_download
+
+ADB_HEADER_BYTES = 8 + 32 * 16
 
 
 def host_os():
     return {'Windows': 'windows', 'Darwin': 'macos', 'Linux': 'linux'}[platform.system()]
 
 
-def binary_matches(data, host):
+def binary_matches(data, host, arm64):
+    if len(data) < 20:
+        return False
     if host == 'windows':
         return data.startswith(b'MZ')
     if host == 'linux':
-        return data.startswith(b'\x7fELF')
-    return data[:4] in (b'\xca\xfe\xba\xbe', b'\xbe\xba\xfe\xca', b'\xcf\xfa\xed\xfe', b'\xfe\xed\xfa\xcf', b'\xca\xfe\xba\xbf', b'\xbf\xba\xfe\xca')
+        return data.startswith(b'\x7fELF\x02\x01') and struct.unpack_from('<H', data, 18)[0] == (183 if arm64 else 62)
+    cpu = 0x0100000c if arm64 else 0x01000007
+    magic = struct.unpack_from('>I', data)[0]
+    endian = '<' if magic in (0xcffaedfe, 0xbebafeca, 0xbfbafeca) else '>'
+    magic, value = struct.unpack_from(endian + 'II', data)
+    if magic == 0xfeedfacf:
+        return value == cpu
+    if magic in (0xcafebabe, 0xcafebabf):
+        record_size = 32 if magic == 0xcafebabf else 20
+        return (1 <= value <= 16 and len(data) >= 8 + value * record_size
+                and any(struct.unpack_from(endian + 'I', data, 8 + index * record_size)[0] == cpu
+                        for index in range(value)))
+    return False
 
 
 def prepare(output, archive=None, offline=False, cache=None, host=None, version=None):
@@ -31,12 +47,13 @@ def prepare(output, archive=None, offline=False, cache=None, host=None, version=
     host = host or host_os()
     if host not in {'windows', 'macos', 'linux'}:
         raise ValueError('Unsupported host: ' + host)
+    arm64 = platform.machine().lower() in ('arm64', 'aarch64')
     output = Path(output).resolve()
     executable = 'adb.exe' if host == 'windows' else 'adb'
     adb = output / executable
     if adb.is_file() and (output / 'NOTICE.txt').is_file() and (output / 'source.properties').is_file():
         with adb.open('rb') as source:
-            valid = binary_matches(source.read(20), host)
+            valid = binary_matches(source.read(ADB_HEADER_BYTES), host, arm64)
         if valid and (version is None or ("Pkg.Revision=" + version) in (output / "source.properties").read_text().replace(" ", "")):
             if host != 'windows':
                 adb.chmod(adb.stat().st_mode | 0o111)
@@ -49,6 +66,8 @@ def prepare(output, archive=None, offline=False, cache=None, host=None, version=
     if not archive.is_file():
         if offline or supplied:
             raise FileNotFoundError('No local Platform Tools ZIP: ' + str(archive))
+        if host == 'linux' and arm64:
+            raise ValueError("Google's Linux ZIP is x86-64 only. Use your distribution's ARM64 adb package or pass a compatible --archive.")
         archive.parent.mkdir(parents=True, exist_ok=True)
         partial = archive.with_suffix('.part')
         try:
@@ -90,14 +109,9 @@ def prepare(output, archive=None, offline=False, cache=None, host=None, version=
             if not (stage / name).is_file():
                 raise ValueError('Missing required Platform Tools file: ' + name)
         with (stage / executable).open('rb') as source:
-            header = source.read(20)
-        if not binary_matches(header, host):
-            raise ValueError('ADB binary does not match ' + host)
-        if host == 'linux':
-            machine = int.from_bytes(header[18:20], 'little')
-            expected = 183 if platform.machine().lower() in ('arm64', 'aarch64') else 62
-            if machine != expected:
-                raise ValueError('Google ADB archive does not match CPU; install native adb and configure its path')
+            header = source.read(ADB_HEADER_BYTES)
+        if not binary_matches(header, host, arm64):
+            raise ValueError('ADB binary does not match this OS/CPU; use a native adb executable or archive')
         if version is not None:
             import re
             revision = re.search(r'Pkg.Revision\s*=\s*(\S+)', (stage / 'source.properties').read_text())

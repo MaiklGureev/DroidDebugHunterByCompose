@@ -3,6 +3,8 @@ package hunter.features.tools
 import com.google.gson.JsonObject
 import hunter.core.Processes
 import hunter.core.json
+import hunter.core.ApplicationLog
+import hunter.core.logHandledFailure
 import hunter.core.obj
 import hunter.core.parseObject
 import hunter.core.tr
@@ -25,6 +27,8 @@ fun toolFindingIds(component: String): List<String> =
         "proxy" -> listOf("mitmproxy", "mitmproxyRs")
         else -> listOf(component)
     }
+
+internal fun toolVersionId(id: String) = if (id == "server" || id == "gadget") "frida" else id
 
 fun componentTitle(id: String): String =
     when (id) {
@@ -63,6 +67,8 @@ enum class SetupMethod(val key: String) {
 }
 
 object ToolPolicy {
+    const val ADB_LATEST = "latest"
+
     val catalog: JsonObject =
         ToolPolicy::class
             .java
@@ -88,8 +94,11 @@ object ToolPolicy {
 
     fun validVersion(value: String) = value.length <= 40 && versionPattern.matches(value)
 
+    fun validDownloadVersion(id: String, value: String) =
+        (id == "adb" && value == ADB_LATEST) || validVersion(value)
+
     fun validate(versions: Map<String, String>) {
-        require(ids.all { validVersion(versions[it].orEmpty()) }) {
+        require(ids.all { validDownloadVersion(it, versions[it].orEmpty()) }) {
             tr("Enter numeric tool versions, for example 3.14.10 or 17.26.2.")
         }
     }
@@ -118,6 +127,11 @@ data class ToolSetupOptions(
     val versions: Map<String, String> = ToolPolicy.ids.associateWith(ToolPolicy::target),
 ) {
     fun version(id: String) = versions[id] ?: ToolPolicy.target(id)
+
+    val adbLatest: Boolean get() = version("adb") == ToolPolicy.ADB_LATEST
+
+    fun downloadVersionLabel(id: String): String =
+        if (id == "adb" && adbLatest) tr("Latest from Google") else version(id)
 }
 
 data class ToolFinding(
@@ -125,6 +139,8 @@ data class ToolFinding(
     val actual: String?,
     val detail: String = "",
     val failed: Boolean = false,
+    val abis: Set<String> = emptySet(),
+    val nativeDecoderError: String? = null,
 ) {
     val title
         get() = when (id) {
@@ -135,7 +151,7 @@ data class ToolFinding(
         }
 
     val versionId
-        get() = if (id == "server" || id == "gadget") "frida" else id
+        get() = toolVersionId(id)
 
     val warning
         get() = failed || actual.isNullOrBlank() || actual != ToolPolicy.target(versionId)
@@ -143,7 +159,8 @@ data class ToolFinding(
     val summary
         get() =
             "$title · ${actual ?: "—"} · ${tr("Target")}: ${ToolPolicy.target(versionId)}\n${ToolPolicy.notice(versionId, actual)}" +
-                if (detail.isBlank()) "" else "\n$detail"
+                (if (detail.isBlank()) "" else "\n$detail") +
+                (nativeDecoderError?.let { "\n$it" } ?: "")
 }
 
 object ToolInspector {
@@ -166,6 +183,11 @@ object ToolInspector {
                     elif key == 'mitmproxy': result[key]['version'] = importlib.import_module('mitmproxy.version').VERSION
             except Exception as e:
                 result[key] = {'error': str(e)}
+        if sys.argv[1] == 'capture':
+            try:
+                import h11, hpack
+            except Exception as e:
+                result['nativeDecoderError'] = str(e)
         print(json.dumps(result))
     """
             .trimIndent()
@@ -176,12 +198,14 @@ object ToolInspector {
             val result = Adb(config).run("version", timeout = 10000).requireSuccess()
             findings +=
                 ToolFinding("adb", ToolPolicy.adbVersion(result), config.adbCommand + "\n" + result)
-        } catch (_: TimeoutCancellationException) {
+        } catch (e: TimeoutCancellationException) {
             currentCoroutineContext().ensureActive()
+            logHandledFailure("tools", "ADB version check timed out", e)
             findings += ToolFinding("adb", null, tr("The check timed out"), true)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
+            logHandledFailure("tools", "ADB version check failed", e)
             findings += ToolFinding("adb", null, e.message.orEmpty(), true)
         }
         try {
@@ -203,12 +227,14 @@ object ToolInspector {
                             )
                             .requireSuccess()
                     )
-                } catch (_: TimeoutCancellationException) {
+                } catch (e: TimeoutCancellationException) {
                     currentCoroutineContext().ensureActive()
+                    logHandledFailure("tools", "mitmproxy import check timed out", e)
                     JsonObject()
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
+                    logHandledFailure("tools", "mitmproxy import check failed", e)
                     JsonObject().apply {
                         for (id in listOf("mitmproxy", "mitmproxyRs")) add(
                             id,
@@ -240,20 +266,26 @@ object ToolInspector {
                 val module =
                     (if (id in listOf("mitmproxy", "mitmproxyRs")) proxyInfo else info)
                         .obj(id)
+                module.get("error")?.takeUnless { it.isJsonNull }?.asString?.let { message ->
+                    currentCoroutineContext()[ApplicationLog]?.warning("tools", "$id import failed · $message")
+                }
                 findings +=
                     ToolFinding(
                         id,
                         module.get("version")?.asString,
                         module.get("error")?.asString ?: module.get("path")?.asString.orEmpty(),
                         module.has("error"),
+                        nativeDecoderError = info.get("nativeDecoderError")?.asString.takeIf { id == "frida" },
                     )
             }
-        } catch (_: TimeoutCancellationException) {
+        } catch (e: TimeoutCancellationException) {
             currentCoroutineContext().ensureActive()
+            logHandledFailure("tools", "Python package check timed out", e)
             findings += ToolFinding("python", null, tr("The check timed out"), true)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
+            logHandledFailure("tools", "Python package check failed", e)
             findings += ToolFinding("python", null, config.pythonCommand + "\n" + e.message, true)
             for (id in listOf("frida", "fridaTools", "mitmproxy", "mitmproxyRs")) findings +=
                 ToolFinding(id, null)
@@ -278,6 +310,7 @@ object ToolInspector {
                     id,
                     fridaVersion.takeIf { abis.isNotEmpty() },
                     if (abis.isNotEmpty()) "${abis.joinToString()} · ${folder.absolutePath}" else folder.absolutePath,
+                    abis = abis.toSet(),
                 )
             }
         }

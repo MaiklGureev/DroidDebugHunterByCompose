@@ -1,7 +1,9 @@
 package hunter.features.connection
 
 import hunter.core.Processes
+import hunter.core.ApplicationLog
 import hunter.core.flag
+import hunter.core.logHandledFailure
 import hunter.core.parseObject
 import hunter.core.text
 import hunter.core.tr
@@ -66,7 +68,7 @@ enum class FridaNext(val label: String) {
     Ready("Start capture"),
 }
 
-data class FridaDiagnosis(val checks: List<CaptureCheck>, val next: FridaNext)
+data class FridaDiagnosis(val checks: List<CaptureCheck>, val next: FridaNext, val requiredAbi: String? = null)
 
 /** Probes the selected transport without starting a server, launching an app or injecting an agent. */
 suspend fun diagnoseFrida(
@@ -77,17 +79,20 @@ suspend fun diagnoseFrida(
     report: (String) -> Unit,
 ): FridaDiagnosis {
     val checks = mutableListOf<CaptureCheck>()
-    fun finish(next: FridaNext) = FridaDiagnosis(checks.toList(), next)
+    var requiredAbi: String? = null
+    fun finish(next: FridaNext) = FridaDiagnosis(checks.toList(), next, requiredAbi)
     suspend fun <T> attempt(title: String, block: suspend () -> T): T? =
         try {
             block()
-        } catch (_: TimeoutCancellationException) {
+        } catch (e: TimeoutCancellationException) {
             currentCoroutineContext().ensureActive()
+            logHandledFailure("frida", "$title · timed out", e)
             checks += CaptureCheck(title, false, tr("The check timed out"))
             null
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
+            logHandledFailure("frida", title, e)
             checks += CaptureCheck(title, false, e.message ?: tr("Unavailable"))
             null
         }
@@ -126,6 +131,7 @@ suspend fun diagnoseFrida(
             ?: return finish(FridaNext.App)
         val arch = attempt(tr("App ABI")) { adb.architecture(serial, app) }
             ?: return finish(FridaNext.App)
+        requiredAbi = arch
         checks += CaptureCheck(tr("App ABI"), true, arch)
         val file = File(config.tools, "frida-gadget/frida-gadget-$version-android-$arch.so")
         attempt("Gadget") {
@@ -139,6 +145,7 @@ suspend fun diagnoseFrida(
 
     val arch = attempt(tr("Device ABI")) { adb.architecture(serial) }
         ?: return finish(FridaNext.Retry)
+    requiredAbi = arch
     checks += CaptureCheck(tr("Device ABI"), true, arch)
     val installedVersion = attempt(tr("Installed server")) {
         val exists = adb.device(serial, "shell", "test -x $MANAGED_FRIDA_SERVER", timeout = 5000)
@@ -175,11 +182,13 @@ suspend fun diagnoseFrida(
         try {
             forward.close()
         } catch (e: Exception) {
+            logHandledFailure("frida", "Failed to release the ADB forward", e)
             report("ADB forward: ${e.message}")
         }
     }
     val probeError = connection?.text("error").orEmpty()
     if (connection != null && probeError.isNotEmpty()) {
+        currentCoroutineContext()[ApplicationLog]?.warning("frida", "Probe returned $probeError")
         checks += CaptureCheck(tr("Frida connection"), false,
             connection.text("detail").ifBlank { probeError })
         if (probeError != "ServerNotRunningError") return finish(FridaNext.Retry)

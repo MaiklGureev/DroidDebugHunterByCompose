@@ -24,6 +24,7 @@ import hunter.core.tr
 import hunter.features.settings.Settings
 import hunter.features.tools.ToolLayout
 import hunter.features.tools.ToolProvisioner
+import hunter.features.tools.ToolSetupUiState
 import hunter.ui.ToolAction
 import hunter.ui.copyText
 import hunter.ui.openFile
@@ -33,7 +34,14 @@ import java.net.URI
 import kotlinx.coroutines.*
 
 @Composable
-fun ToolSourcesDialog(model: AppState, config: Settings, components: List<String>, close: () -> Unit) {
+fun ToolSourcesDialog(
+    model: AppState,
+    config: Settings,
+    components: List<String>,
+    toolState: ToolSetupUiState,
+    allowDownload: Boolean,
+    close: () -> Unit,
+) {
     val scope = rememberCoroutineScope()
     val sources =
         remember(config.setup.versions, components) { ToolLayout.sources(config, components) }
@@ -70,13 +78,13 @@ fun ToolSourcesDialog(model: AppState, config: Settings, components: List<String
                                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                                 verticalArrangement = Arrangement.spacedBy(4.dp),
                             ) {
-                                if (ToolLayout.isArchive(source))
+                                if (allowDownload && ToolLayout.isArchive(source))
                                     ToolAction(
                                         tr("Download file"),
                                         Icons.Outlined.Download,
                                         model.busy.isEmpty(),
                                     ) {
-                                        model.downloadToolSource(config, source)
+                                        model.toolSetup.download(config, source)
                                     }
                                 ToolAction(tr("Copy link"), Icons.Outlined.ContentCopy) {
                                     copyText(model, source.url)
@@ -124,7 +132,7 @@ fun ToolSourcesDialog(model: AppState, config: Settings, components: List<String
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 if (model.error.isNotBlank()) Text(model.error, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
-                model.setupProgress?.let { progress ->
+                toolState.progress?.let { progress ->
                     Text(progress.phase + " · " + progress.detail, style = MaterialTheme.typography.bodySmall, maxLines = 2)
                     val fraction = progress.fraction
                     if (fraction != null) {
@@ -134,9 +142,9 @@ fun ToolSourcesDialog(model: AppState, config: Settings, components: List<String
                             style = MaterialTheme.typography.labelSmall,
                         )
                     } else LinearProgressIndicator(Modifier.fillMaxWidth())
-                    ToolAction(tr("Cancel")) { model.cancelOperation() }
+                    ToolAction(tr("Cancel"), onClick = model.toolSetup::cancel)
                 }
-                model.lastDownloadedToolFile?.let {
+                toolState.lastDownloadedFile?.let {
                     SelectionContainer {
                         Text(tr("Downloaded: {0}", it.absolutePath), style = MaterialTheme.typography.labelSmall)
                     }

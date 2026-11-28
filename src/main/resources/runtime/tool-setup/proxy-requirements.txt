@@ -1,7 +1,9 @@
 # Prepare separately with Python 3.14 for each host OS and CPU; never copy native wheels between hosts.
 aioquic==1.2.0
 argon2-cffi==25.1.0
-argon2-cffi-bindings==26.1.0
+# 26.1.0 provides macOS ARM64 wheels only.
+argon2-cffi-bindings==25.1.0; sys_platform == "darwin" and platform_machine == "x86_64"
+argon2-cffi-bindings==26.1.0; sys_platform != "darwin" or platform_machine != "x86_64"
 asgiref==3.12.1
 attrs==26.1.0
 bcrypt==5.0.0
@@ -23,6 +25,7 @@ ldap3==2.9.1
 MarkupSafe==3.0.4
 mitmproxy==12.3.1
 mitmproxy_rs==0.12.15
+mitmproxy-macos==0.12.15; sys_platform == "darwin"
 mitmproxy-windows==0.12.15; sys_platform == "win32"
 publicsuffix2==2.20191221
 pyasn1==0.6.5

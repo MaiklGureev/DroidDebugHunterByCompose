@@ -1,8 +1,11 @@
 package hunter.features.android
 
 import hunter.core.AppFiles
+import hunter.core.ApplicationLog
+import hunter.core.CommandResult
 import hunter.core.Processes
 import hunter.core.array
+import hunter.core.logHandledFailure
 import hunter.core.parseObject
 import hunter.core.text
 import hunter.core.tr
@@ -45,8 +48,19 @@ enum class AdbAction(
 }
 
 class Adb(private val settings: Settings) {
-    suspend fun run(vararg args: String, timeout: Long = 30000) =
-        Processes.run(listOf(settings.adbCommand) + args, timeoutMs = timeout)
+    suspend fun run(vararg args: String, timeout: Long = 30000): CommandResult {
+        val log = currentCoroutineContext()[ApplicationLog]
+        val action = args.getOrNull(if (args.firstOrNull() == "-s") 2 else 0).orEmpty()
+        log?.debug("adb", "Command · $action")
+        // ADB can start the shared daemon as a descendant of this client.
+        return Processes.run(
+            listOf(settings.adbCommand) + args,
+            timeoutMs = timeout,
+            terminateDescendants = false,
+        ).also { result ->
+            if (result.code != 0) log?.warning("adb", "Command $action exited with code ${result.code}")
+        }
+    }
 
     suspend fun device(serial: String, vararg args: String, timeout: Long = 30000) =
         run("-s", serial, *args, timeout = timeout)
@@ -101,6 +115,7 @@ class Adb(private val settings: Settings) {
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
+                    logHandledFailure("adb", "Application label lookup failed", e)
                     onWarning(tr("App labels unavailable: {0}", e.message))
                     emptyMap()
                 }
@@ -151,7 +166,11 @@ class Adb(private val settings: Settings) {
                 }
         } finally {
             withContext(NonCancellable) {
-                runCatching { device(serial, "shell", "rm -f $remote", timeout = 4000) }
+                try {
+                    device(serial, "shell", "rm -f $remote", timeout = 4000).requireSuccess()
+                } catch (e: Exception) {
+                    logHandledFailure("adb", "Android label helper cleanup failed", e)
+                }
             }
         }
     }
@@ -195,6 +214,16 @@ class Adb(private val settings: Settings) {
             .toList()
     }
 
+    internal suspend fun launcherActivity(serial: String, user: Int, packageName: String): String {
+        validateName(packageName)
+        return shell(
+            serial,
+            "cmd package resolve-activity --brief --user $user -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -p ${quote(packageName)}",
+        ).lineSequence().lastOrNull {
+            it.startsWith("$packageName/") && it.matches(Regex("[A-Za-z][\\w.]*/[A-Za-z_.$][\\w.$]*"))
+        } ?: error(tr("The app has no launcher activity"))
+    }
+
     suspend fun execute(
         action: AdbAction,
         serial: String,
@@ -234,16 +263,7 @@ class Adb(private val settings: Settings) {
         val debugging = action in listOf(AdbAction.Debug, AdbAction.RestartDebug)
         var launcher = ""
         if (starting) {
-            launcher =
-                shell(
-                        serial,
-                        "cmd package resolve-activity --brief --user $user -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -p $pkg",
-                    )
-                    .lineSequence()
-                    .lastOrNull {
-                        it.matches(Regex("[A-Za-z][\\w.]*/[A-Za-z_.$][\\w.$]*")) &&
-                            it.startsWith(app!!.packageName + "/")
-                    } ?: error(tr("The app has no launcher activity"))
+            launcher = launcherActivity(serial, user, app!!.packageName)
             if (debugging) {
                 check(
                     Regex("(?s)\\b(?:flags|pkgFlags)=\\[[^]]*\\bDEBUGGABLE\\b")

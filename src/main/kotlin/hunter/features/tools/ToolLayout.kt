@@ -21,6 +21,36 @@ data class ToolSource(
 )
 
 object ToolLayout {
+    internal const val NATIVE_ADB_HINT =
+        "Google's Linux ZIP is x86-64 only. Use your distribution's ARM64 adb package and set its executable path, or select a compatible local ZIP."
+
+    internal fun hasGoogleAdbArchive(platform: HostPlatform = HostPlatform.current): Boolean =
+        !(platform.os == HostOs.Linux && platform.arch == "arm64")
+
+    internal fun adbSource(options: ToolSetupOptions, platform: HostPlatform = HostPlatform.current): ToolSource {
+        require(hasGoogleAdbArchive(platform)) { tr(NATIVE_ADB_HINT) }
+        val version = options.version("adb")
+        require(ToolPolicy.validDownloadVersion("adb", version))
+        val suffix = when (platform.os) {
+            HostOs.Windows -> if (options.adbLatest) "windows" else "win"
+            HostOs.MacOS -> "darwin"
+            HostOs.Linux -> "linux"
+        }
+        val name = if (options.adbLatest) "platform-tools-latest-$suffix.zip"
+            else "platform-tools_r$version-$suffix.zip"
+        return ToolSource(
+            "Platform Tools ${options.downloadVersionLabel("adb")} · ${platform.label}",
+            "https://dl.google.com/android/repository/$name",
+            folder("adb"),
+            "Extract the platform-tools folder from ZIP; retain all libraries and notices.",
+        )
+    }
+
+    internal fun adbChecksum(options: ToolSetupOptions, platform: HostPlatform = HostPlatform.current): String? =
+        if (options.version("adb") == ToolPolicy.target("adb"))
+            ToolPolicy.catalog.getAsJsonObject("adbSha256").get(platform.os.id).asString
+        else null
+
     fun isArchive(source: ToolSource) =
         listOf(".zip", ".xz", ".apk", ".tar.gz").any { URI(source.url).path.endsWith(it) }
 
@@ -63,14 +93,8 @@ object ToolLayout {
                     "No official SHA-256 available. Open the download link and verify the archive manually."
                 )
             }
-        } else if (
-            subdirectory == "adb" && config.setup.version("adb") == ToolPolicy.target("adb")
-        ) {
-            expected =
-                ToolPolicy.catalog
-                    .getAsJsonObject("adbSha256")
-                    .get(HostPlatform.current.os.id)
-                    .asString
+        } else if (subdirectory == "adb") {
+            expected = adbChecksum(config.setup)
         } else if (subdirectory == "uv")
             expected =
                 ToolPolicy.catalog
@@ -84,7 +108,8 @@ object ToolLayout {
             File(cache, "$subdirectory/$name"),
             expected,
             config.setup.offline,
-            progress,
+            refresh = subdirectory == "adb" && config.setup.adbLatest,
+            progress = progress,
         )
     }
 
@@ -191,28 +216,19 @@ object ToolLayout {
     fun sources(config: Settings, component: String): List<ToolSource> =
         sources(config, listOf(component))
 
-    fun sources(config: Settings, components: List<String>): List<ToolSource> {
+    fun sources(config: Settings, components: List<String>): List<ToolSource> =
+        sources(config, components, HostPlatform.current)
+
+    internal fun sources(config: Settings, components: List<String>, platform: HostPlatform): List<ToolSource> {
         ToolPolicy.validate(config.setup.versions)
         val versions = config.setup
         val selected = ToolProvisioner.expand(components)
         val result = mutableListOf<ToolSource>()
         for (id in selected) {
             when (id) {
-                "adb" -> {
-                    val suffix =
-                        when (HostPlatform.current.os) {
-                            HostOs.Windows -> "win"
-                            HostOs.MacOS -> "darwin"
-                            HostOs.Linux -> "linux"
-                        }
-                    result +=
-                        ToolSource(
-                            "Platform Tools ${versions.version("adb")} · ${HostPlatform.current.label}",
-                            "https://dl.google.com/android/repository/platform-tools_r${versions.version("adb")}-$suffix.zip",
-                            "platform-tools",
-                            "Extract the platform-tools folder from ZIP; retain all libraries and notices.",
-                        )
-                }
+                "adb" -> result += if (hasGoogleAdbArchive(platform)) adbSource(versions, platform)
+                    else ToolSource("ADB · Debian ARM64", "https://packages.debian.org/trixie/arm64/adb",
+                        folder("adb"), NATIVE_ADB_HINT)
                 "server",
                 "gadget" -> {
                     val version = versions.version("frida")
@@ -239,7 +255,9 @@ object ToolLayout {
                             "$pkg ${versions.version(key)} · PyPI",
                             "https://pypi.org/project/$pkg/${versions.version(key)}/#files",
                             folder(id),
-                            "Package download page: choose matching wheels. Do not unpack wheels here manually; install with pip --target. Offline wheels go in downloads/wheelhouse/capture or proxy with all dependencies.",
+                            if (pkg == "mitmproxy" && platform.key == "macos-x64")
+                                "The target cryptography release has no Intel macOS wheel on PyPI. Place a compatible wheel in the proxy wheelhouse and retry. See the platform guide."
+                            else "Package download page: choose matching wheels. Do not unpack wheels here manually; install with pip --target. Offline wheels go in downloads/wheelhouse/capture or proxy with all dependencies.",
                         )
                 }
                 "python" -> {
@@ -253,11 +271,11 @@ object ToolLayout {
                     val asset =
                         ToolPolicy.catalog
                             .getAsJsonObject("uvAssets")
-                            .getAsJsonArray(HostPlatform.current.key)[0]
+                            .getAsJsonArray(platform.key)[0]
                             .asString
                     result +=
                         ToolSource(
-                            "uv ${ToolPolicy.target("uv")} · ${HostPlatform.current.label}",
+                            "uv ${ToolPolicy.target("uv")} · ${platform.label}",
                             "https://github.com/astral-sh/uv/releases/download/${ToolPolicy.target("uv")}/$asset",
                             "downloads/uv",
                             "Save the original archive in the uv cache, or extract uv and select its executable on Connection.",

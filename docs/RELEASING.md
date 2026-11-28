@@ -6,7 +6,7 @@ The `Release` workflow builds Windows x64, Linux x64 and macOS arm64/x64, verifi
 
 Test packaging helpers with `python -m unittest discover -s scripts -p 'test_*.py'`. Gradle's project version, `packageVersion`, release notes and workflow `RELEASE_TAG` must match.
 
-Release workflow/script/help changes and source changes in `master` trigger four builds. Publication runs only for an explicit `release:` commit-message prefix or a manual `workflow_dispatch`. The current configured release is `v1.1.3`; update the version and notes deliberately for a new release.
+Release workflow/script/help changes and source changes in `master` trigger four builds. Publication runs only for an explicit `release:` commit-message prefix or a manual `workflow_dispatch`. The current configured release is `v1.1.4`; update the version and notes deliberately for a new release.
 
 After all targets succeed, publication checks each file's source commit, version, size and SHA-256. It creates `SHA256SUMS.txt`, a draft release and a tag at the exact build commit, uploads all installers, archives, manifests, bilingual documentation and the MIT License, then publishes. Incomplete or corrupted builds cannot publish. Existing published releases are not replaced automatically.
 

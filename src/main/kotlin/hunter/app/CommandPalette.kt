@@ -51,18 +51,18 @@ fun CommandPalette(model: AppState, dismiss: () -> Unit) {
     }
     val actions = listOf(
         PaletteCommand("import-har", tr("Import HAR"), Icons.Outlined.FileOpen) {
-            chooseFile(title = tr("Import HAR"))?.let(model::importHar)
+            chooseFile(title = tr("Import HAR"))?.let(model.traffic::importHar)
         },
         PaletteCommand("refresh-devices", tr("Refresh devices"), Icons.Outlined.Refresh) {
-            model.task(tr("Refreshing devices")) { model.refreshDevices(true) }
+            model.connection.refresh()
         },
-        PaletteCommand("refresh-apps", tr("Refresh apps"), Icons.Outlined.Apps, model::loadApps),
+        PaletteCommand("refresh-apps", tr("Refresh apps"), Icons.Outlined.Apps, model.connection::loadApps),
         PaletteCommand("check-tools", tr("Check tools"), Icons.Outlined.Build) {
             model.page = Page.Connection
-            model.checkTools()
+            model.toolSetup.checkTools()
         },
         PaletteCommand("capture", tr("Start / stop capture"), Icons.Outlined.SwapVert, model::toggleCapture),
-        PaletteCommand("logcat", tr("Start / stop Logcat"), Icons.Outlined.Terminal, model::toggleLogcat),
+        PaletteCommand("logcat", tr("Start / stop Logcat"), Icons.Outlined.Terminal, model.logcat::toggle),
     )
     Dialog(
         onDismissRequest = dismiss,

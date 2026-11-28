@@ -52,7 +52,7 @@ fun ExchangeContent(model: AppState, exchange: Exchange) {
                 .padding(20.dp)
                 .onPreviewKeyEvent {
                     if (it.type == KeyEventType.KeyDown && it.key == Key.Escape) {
-                        model.detailIds.remove(exchange.id)
+                        model.traffic.closeDetails(exchange.id)
                         true
                     } else false
                 }
@@ -291,7 +291,7 @@ fun BodyViewer(model: AppState, body: Body, type: String, modifier: Modifier = M
             }
             MiniIcon(Icons.Outlined.Save, tr("Save original bytes"), model.busy.isEmpty()) {
                 chooseFile(true, if (body.complete) "body.bin" else "body.partial.bin")?.let {
-                    model.saveBody(it, body)
+                    model.traffic.saveBody(it, body)
                 }
             }
             MiniIcon(

@@ -20,65 +20,63 @@ import hunter.ui.Choice
 import hunter.ui.Muted
 import hunter.ui.Panel
 import hunter.ui.ToolCheck
+import hunter.ui.chooseFile
 import hunter.ui.isDarkTheme
 import hunter.ui.openFile
 
 @Composable
 fun SettingsScreen(model: AppState) {
-    val dark = model.settings.isDarkTheme()
-    var draft by
-        remember(model.settings.copy(language = UiLanguage.English, dark = false, followSystemTheme = false)) {
-            mutableStateOf(model.settings)
-        }
-    val enabled = model.busy.isEmpty() && !model.capturing && !model.logging
+    val viewModel = model.settings
+    val settings by viewModel.uiState.collectAsState()
+    val dark = settings.isDarkTheme()
+    var autoRefresh by remember(settings.autoRefresh) { mutableStateOf(settings.autoRefresh) }
+    var maxLogs by remember(settings.maxLogs) { mutableStateOf(settings.maxLogs) }
+    var maxRequests by remember(settings.maxRequests) { mutableStateOf(settings.maxRequests) }
+    val capturing by model.traffic.running.collectAsState(model.traffic.uiState.value.running)
+    val logging by model.logcat.running.collectAsState(model.logcat.uiState.value.running)
+    val enabled = model.busy.isEmpty() && !capturing && !logging
+    val logFileError by model.applicationLog.fileError.collectAsState()
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         Panel(tr("Interface language"), modifier = Modifier.fillMaxWidth()) {
             Choice(
-                model.settings.language,
+                settings.language,
                 UiLanguage.entries,
                 { it.nativeName },
-                {
-                    model.changeLanguage(it)
-                    draft = draft.copy(language = it)
-                },
+                viewModel::setLanguage,
                 Modifier.width(230.dp),
             )
             Text(tr("Language changes immediately and is saved automatically."), color = Muted)
         }
         Panel(tr("Behavior and memory"), modifier = Modifier.fillMaxWidth()) {
-            Check(tr("Automatically refresh devices every 5 seconds"), draft.autoRefresh, enabled) {
-                draft = draft.copy(autoRefresh = it)
+            Check(tr("Automatically refresh devices every 5 seconds"), autoRefresh, enabled) {
+                autoRefresh = it
             }
-            ToolCheck(tr("Follow system theme"), model.settings.followSystemTheme) {
-                model.updateSettings(model.settings.copy(followSystemTheme = it, dark = dark))
-                draft = draft.copy(followSystemTheme = it, dark = dark)
+            ToolCheck(tr("Follow system theme"), settings.followSystemTheme) {
+                viewModel.setFollowSystemTheme(it, dark)
             }
-            ToolCheck(tr("Dark theme"), dark, !model.settings.followSystemTheme) {
-                model.updateSettings(model.settings.copy(dark = it))
-                draft = draft.copy(dark = it)
-            }
+            ToolCheck(tr("Dark theme"), dark, !settings.followSystemTheme, onChange = viewModel::setDarkTheme)
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
             ) {
                 Text(tr("Logcat rows"), color = Muted)
                 Choice(
-                    draft.maxLogs,
+                    maxLogs,
                     listOf(20000, 50000, 100000),
                     { it.toString() },
-                    { draft = draft.copy(maxLogs = it) },
+                    { maxLogs = it },
                     Modifier.width(130.dp),
                     enabled,
                 )
                 Text(tr("HTTP requests"), color = Muted)
                 Choice(
-                    draft.maxRequests,
+                    maxRequests,
                     listOf(1000, 5000, 10000, 20000),
                     { it.toString() },
-                    { draft = draft.copy(maxRequests = it) },
+                    { maxRequests = it },
                     Modifier.width(130.dp),
                     enabled,
                 )
@@ -91,12 +89,7 @@ fun SettingsScreen(model: AppState) {
                 fontSize = 11.sp,
             )
             Action(tr("Apply"), Icons.Outlined.Check, enabled) {
-                model.updateSettings(model.settings.copy(
-                    autoRefresh = draft.autoRefresh,
-                    maxLogs = draft.maxLogs,
-                    maxRequests = draft.maxRequests,
-                ))
-                model.status = tr("Settings applied")
+                viewModel.applyBehavior(autoRefresh, maxLogs, maxRequests)
             }
         }
         Panel(
@@ -111,9 +104,19 @@ fun SettingsScreen(model: AppState) {
                     tr("Reset CA and VPN…"),
                     enabled = enabled,
                     danger = true,
-                    onClick = model::resetCapture,
+                    onClick = model.connection::resetCapture,
                 )
             }
         }
+        ApplicationLogPanel(
+            path = model.applicationLog.file.absolutePath,
+            fileError = logFileError,
+            enabled = model.busy.isEmpty(),
+            export = {
+                chooseFile(save = true, name = "droiddebughunter.log", title = tr("Export log"), extension = "log")
+                    ?.let(model::exportApplicationLog)
+            },
+            clear = model::confirmClearApplicationLog,
+        )
     }
 }

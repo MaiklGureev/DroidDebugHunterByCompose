@@ -18,12 +18,14 @@ import hunter.app.AppState
 import hunter.app.OutputWindow
 import hunter.core.tr
 import hunter.features.tools.ToolFinding
+import hunter.features.tools.ToolComponentStatus
 import hunter.features.tools.ToolLayout
 import hunter.features.tools.ToolPolicy
 import hunter.features.tools.ToolSetupOptions
 import hunter.features.tools.ToolStep
 import hunter.features.tools.ToolStepState
 import hunter.features.tools.componentTitle
+import hunter.features.tools.needsToolPreparation
 import hunter.features.tools.toolConfiguration
 import hunter.features.tools.toolFindingIds
 import hunter.ui.Check
@@ -42,8 +44,13 @@ fun ConnectionToolsPanel(
     model: AppState,
     captureComponents: List<String>,
     modifier: Modifier = Modifier,
+    componentStatus: (String) -> ToolComponentStatus,
+    availableOnAndroid: Set<String>,
 ) {
-    val config = model.settings
+    val toolSetup = model.toolSetup
+    val connectionState by model.connection.uiState.collectAsState()
+    val toolState by toolSetup.uiState.collectAsState()
+    val config by model.settings.uiState.collectAsState()
     val optional = when {
         "server" in captureComponents -> listOf("gadget")
         "gadget" in captureComponents -> listOf("server")
@@ -51,25 +58,26 @@ fun ConnectionToolsPanel(
     }
     val batchComponents = captureComponents + optional
     val components = listOf("adb") + batchComponents
-    val findings = model.toolFindings.associateBy { it.id }
-    val unfinished = batchComponents.filter {
-        model.toolSteps[it]?.state?.let { state -> state != ToolStepState.Prepared } == true
-    }
+    val findings = toolState.findings.associateBy { it.id }
     var sources by remember(captureComponents) { mutableStateOf(emptyList<String>()) }
     var draft by remember(captureComponents, config.toolConfiguration(), config.setup) { mutableStateOf(config) }
-    val valid = draft.tools.isNotBlank() && ToolPolicy.ids.all { ToolPolicy.validVersion(draft.setup.version(it)) }
-    val editable = model.canPrepareTools
+    val valid = draft.tools.isNotBlank() && ToolPolicy.ids.all { ToolPolicy.validDownloadVersion(it, draft.setup.version(it)) }
+    val capturing by model.traffic.running.collectAsState(model.traffic.uiState.value.running)
+    val logging by model.logcat.running.collectAsState(model.logcat.uiState.value.running)
+    val editable = model.initialized && model.busy.isEmpty() && !capturing && !logging && !connectionState.ownsFridaServer
     val checkingAllowed = model.initialized && model.busy.isEmpty()
     val scope = rememberCoroutineScope()
+    val hasGoogleAdbArchive = ToolLayout.hasGoogleAdbArchive()
+    val canPrepareAdb = hasGoogleAdbArchive || draft.setup.adbArchive.isNotBlank()
 
-    fun apply() {
-        model.updateSettings(model.settings.copy(
-            adb = draft.adb.trim(),
-            python = draft.python.trim(),
-            tools = draft.tools.trim(),
-            setup = draft.setup,
-        ))
-    }
+    fun needsPreparation(id: String): Boolean =
+        needsToolPreparation(id, componentStatus(id), id in availableOnAndroid, config, draft)
+
+    val pendingRequired = captureComponents.filter(::needsPreparation)
+    val pendingBatch = batchComponents.filter(::needsPreparation)
+    val unfinished = toolState.unfinished(batchComponents).filter(::needsPreparation)
+
+    fun apply() = toolSetup.save(draft)
 
     Column(
         modifier.fillMaxWidth().onPreviewKeyEvent { event ->
@@ -81,16 +89,15 @@ fun ConnectionToolsPanel(
         },
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        ToolSetupPanel(model, draft, { draft = it }, ::apply, editable, valid)
+        ToolSetupPanel(
+            draft, { draft = it }, ::apply, editable, valid, toolState.directoryWarnings,
+            onCheckFolders = { toolSetup.checkFolders(draft) },
+        )
         HorizontalDivider()
 
-        fun prepare(ids: List<String>) {
-            apply()
-            model.setupTools(ids)
-        }
+        fun prepare(ids: List<String>) = toolSetup.prepare(ids, draft)
         ToolAction(tr("Check tools"), Icons.Outlined.Refresh, checkingAllowed && (!editable || valid)) {
-            if (editable) apply()
-            model.checkTools(refreshAdb = true)
+            toolSetup.checkTools(refreshAdb = true, draft = draft.takeIf { editable })
         }
 
         for (id in components) key(id) {
@@ -105,17 +112,19 @@ fun ConnectionToolsPanel(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
-                        ToolAction(tr("Prepare capture tools"), Icons.Outlined.Download, editable && valid) {
-                            prepare(captureComponents)
+                        if (pendingRequired.isNotEmpty() && pendingRequired != unfinished) {
+                            ToolAction(tr("Prepare missing tools"), Icons.Outlined.Download, editable && valid) {
+                                prepare(pendingRequired)
+                            }
                         }
-                        if (optional.isNotEmpty()) {
+                        if (optional.isNotEmpty() && pendingBatch != pendingRequired && pendingBatch != unfinished) {
                             ToolAction(componentTitle("frida"), Icons.Outlined.Download, editable && valid) {
-                                prepare(batchComponents)
+                                prepare(pendingBatch)
                             }
                         }
                         if (unfinished.isNotEmpty()) {
                             ToolAction(tr("Retry unfinished components"), Icons.Outlined.Refresh, editable && valid) {
-                                prepare(unfinished)
+                                toolSetup.retryUnfinished(unfinished, draft)
                             }
                         }
                     }
@@ -127,17 +136,25 @@ fun ConnectionToolsPanel(
                 }
             }
             val detected = toolFindingIds(id).map { findings[it] ?: ToolFinding(it, null) }
-            val step = model.toolSteps[id]?.takeIf { it.state != ToolStepState.Prepared }
+            val step = toolState.steps[id]?.takeIf { it.state != ToolStepState.Prepared }
             val destination = File(draft.tools, ToolLayout.folder(id)).absoluteFile
             val manualHint = if (valid) ToolLayout.sources(draft, id).firstOrNull()?.formatKey else null
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                ToolListRow(id, detected, step, findings.isNotEmpty(), draft.setup, id in optional) {
+                ToolListRow(id, detected, step, componentStatus(id), draft.setup, id in optional) {
                     val details = detected.joinToString("\n\n") { it.summary }
                     val text = if (step == null) details else "$details\n\n${step.detail}"
                     model.outputs += OutputWindow(title = componentTitle(id), text = text)
                 }
-                ToolDownloadVersions(detected.map { it.versionId }, draft.setup, editable) { versions ->
-                    draft = draft.copy(setup = draft.setup.copy(versions = draft.setup.versions + versions))
+                val prepareLatest: (() -> Unit)? = if (id == "adb" && valid && hasGoogleAdbArchive) {
+                    {
+                        val latest = draft.setup.versions + ("adb" to ToolPolicy.ADB_LATEST)
+                        toolSetup.prepare(listOf("adb"), draft.copy(setup = draft.setup.copy(versions = latest)))
+                    }
+                } else null
+                if (id != "adb" || canPrepareAdb) {
+                    ToolDownloadVersions(detected.map { it.versionId }, draft.setup, editable, prepareLatest) { versions ->
+                        draft = draft.copy(setup = draft.setup.copy(versions = draft.setup.versions + versions))
+                    }
                 }
                 SelectionContainer {
                     Text(
@@ -170,16 +187,19 @@ fun ConnectionToolsPanel(
                         }
                     }
                     ToolAction(tr("Manual download"), Icons.Outlined.Link, valid) { sources = listOf(id) }
-                    ToolAction(tr("Download and prepare"), Icons.Outlined.Download,
-                        editable && valid, primary = true) {
-                        prepare(listOf(id))
+                    if (needsPreparation(id) && (id != "adb" || canPrepareAdb)) {
+                        val label = if (id == "adb" && !hasGoogleAdbArchive) "Prepare local ZIP" else "Download and prepare"
+                        ToolAction(tr(label), Icons.Outlined.Download,
+                            editable && valid, primary = true) {
+                            prepare(listOf(id))
+                        }
                     }
                 }
             }
             HorizontalDivider()
         }
 
-        model.setupProgress?.let { progress ->
+        toolState.progress?.let { progress ->
             Text("${progress.phase} · ${progress.detail}", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall)
             val fraction = progress.fraction
             if (fraction == null) LinearProgressIndicator(Modifier.fillMaxWidth())
@@ -187,15 +207,34 @@ fun ConnectionToolsPanel(
                 LinearProgressIndicator({ fraction }, Modifier.fillMaxWidth())
                 Text("${(fraction * 100).toInt()}% · ${progress.bytes / 1024} KiB", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelSmall)
             }
-            ToolAction(tr("Cancel"), Icons.Outlined.Close, onClick = model::cancelOperation)
+            ToolAction(tr("Cancel"), Icons.Outlined.Close, onClick = toolSetup::cancel)
         }
-        if (model.setupLiveLog.isNotBlank()) {
+        if (toolState.liveLog.isNotBlank()) {
             ToolAction(tr("Setup log"), Icons.Outlined.Description) {
-                model.outputs += OutputWindow(title = tr("Setup log"), text = model.setupLiveLog)
+                model.outputs += OutputWindow(title = tr("Setup log"), text = toolState.liveLog)
             }
         }
     }
-    if (sources.isNotEmpty()) ToolSourcesDialog(model, draft, sources) { sources = emptyList() }
+    if (sources.isNotEmpty()) {
+        ToolSourcesDialog(
+            model, draft, sources, toolState, allowDownload = sources.any(::needsPreparation),
+        ) { sources = emptyList() }
+    }
+}
+
+@Composable
+internal fun ToolStatusBadge(status: ToolComponentStatus, label: String = tr(status.label)) {
+    val scheme = MaterialTheme.colorScheme
+    val (container, content) = when (status) {
+        ToolComponentStatus.Unchecked -> scheme.surfaceVariant to scheme.onSurfaceVariant
+        ToolComponentStatus.Failed -> scheme.errorContainer to scheme.onErrorContainer
+        ToolComponentStatus.Missing, ToolComponentStatus.DifferentVersion ->
+            scheme.tertiaryContainer to scheme.onTertiaryContainer
+        ToolComponentStatus.Ready -> scheme.secondaryContainer to scheme.onSecondaryContainer
+    }
+    Badge(containerColor = container, contentColor = content) {
+        Text(label, Modifier.padding(horizontal = 4.dp), style = MaterialTheme.typography.labelSmall)
+    }
 }
 
 @Composable
@@ -203,19 +242,12 @@ private fun ToolListRow(
     id: String,
     detected: List<ToolFinding>,
     step: ToolStep?,
-    inspected: Boolean,
+    status: ToolComponentStatus,
     options: ToolSetupOptions,
     optional: Boolean,
     onDetails: () -> Unit,
 ) {
     val scheme = MaterialTheme.colorScheme
-    val (status, container, content) = when {
-        !inspected -> Triple(tr("Not checked"), scheme.surfaceVariant, scheme.onSurfaceVariant)
-        detected.any { it.failed } -> Triple(tr("Check required"), scheme.errorContainer, scheme.onErrorContainer)
-        detected.any { it.actual == null } -> Triple(tr("Not found"), scheme.tertiaryContainer, scheme.onTertiaryContainer)
-        detected.any { it.warning } -> Triple(tr("Different version"), scheme.tertiaryContainer, scheme.onTertiaryContainer)
-        else -> Triple(tr("Ready"), scheme.secondaryContainer, scheme.onSecondaryContainer)
-    }
     Row(
         Modifier.fillMaxWidth().heightIn(min = 48.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -225,10 +257,17 @@ private fun ToolListRow(
             val title = componentTitle(id)
             Text(if (optional) tr("{0} (optional)", title) else title, style = MaterialTheme.typography.bodyMedium)
             for (finding in detected) {
+                val versionLabel = if (finding.versionId == "adb" && !ToolLayout.hasGoogleAdbArchive()) {
+                    when {
+                        options.adbArchive.isBlank() -> "—"
+                        options.adbLatest -> tr("Version from ZIP")
+                        else -> options.version("adb")
+                    }
+                } else options.downloadVersionLabel(finding.versionId)
                 val versions = tr(
                     "Detected: {0} · Download version: {1}",
                     finding.actual ?: "—",
-                    options.version(finding.versionId),
+                    versionLabel,
                 )
                 Text(
                     if (detected.size > 1) "${finding.title} · $versions" else versions,
@@ -243,9 +282,7 @@ private fun ToolListRow(
                     maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
         }
-        Badge(containerColor = container, contentColor = content) {
-            Text(status, Modifier.padding(horizontal = 4.dp), style = MaterialTheme.typography.labelSmall)
-        }
+        ToolStatusBadge(status)
         ToolAction(tr("Details"), Icons.Outlined.Info, onClick = onDetails)
     }
 }
@@ -266,17 +303,17 @@ private fun ToolListPreview(dark: Boolean) {
                 val options = ToolSetupOptions()
                 ToolListRow(
                     "adb", listOf(ToolFinding("adb", options.version("adb"))), null,
-                    true, options, false, {},
+                    ToolComponentStatus.Ready, options, false, {},
                 )
                 ToolListRow(
                     "python", listOf(ToolFinding("python", null)),
                     ToolStep("python", ToolStepState.Skipped, tr("Prepare Python first, or use the download links for manual setup.")),
-                    true, options, false, {},
+                    ToolComponentStatus.Missing, options, false, {},
                 )
                 ToolListRow(
                     "proxy",
                     toolFindingIds("proxy").map { ToolFinding(it, options.version(it)) },
-                    null, true, options, false, {},
+                    null, ToolComponentStatus.Ready, options, false, {},
                 )
             }
         }

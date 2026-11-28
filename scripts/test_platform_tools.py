@@ -4,6 +4,7 @@ import importlib.util
 import io
 import os
 from pathlib import Path
+import struct
 import tempfile
 import sys
 import unittest
@@ -32,7 +33,8 @@ class PlatformToolsTest(unittest.TestCase):
         self.temp.cleanup()
 
     def archive(self, host, extra=None):
-        header = {'windows': b'MZ' + bytes(18), 'macos': b'\xcf\xfa\xed\xfe' + bytes(16), 'linux': b'\x7fELF' + bytes(14) + b'\x3e\x00'}[host]
+        header = {'windows': b'MZ' + bytes(18), 'macos': struct.pack('<II12x', 0xfeedfacf, 0x01000007),
+                  'linux': b'\x7fELF\x02\x01' + bytes(12) + b'\x3e\x00'}[host]
         entries = {'platform-tools/' + ('adb.exe' if host == 'windows' else 'adb'): header, 'platform-tools/NOTICE.txt': b'notice', 'platform-tools/source.properties': b'Pkg.Revision=1'}
         if host == 'windows':
             entries.update({'platform-tools/AdbWinApi.dll': b'MZ', 'platform-tools/AdbWinUsbApi.dll': b'MZ'})
@@ -67,6 +69,25 @@ class PlatformToolsTest(unittest.TestCase):
     def test_linux_cpu_mismatch_is_explained(self):
         with patch.object(self.module.platform, 'machine', return_value='aarch64'), self.assertRaisesRegex(ValueError, 'CPU'):
             self.module.prepare(self.root / 'output', self.archive('linux'), host='linux')
+
+    def test_linux_arm64_skips_google_download_and_accepts_local_native_archive(self):
+        output = self.root / 'output'
+        with patch.object(self.module.platform, 'machine', return_value='aarch64'), \
+                patch.object(self.module.urllib.request, 'urlopen', side_effect=AssertionError('network')):
+            with self.assertRaisesRegex(ValueError, 'x86-64 only'):
+                self.module.prepare(output, host='linux')
+            header = b'\x7fELF\x02\x01' + bytes(12) + struct.pack('<H', 183)
+            self.module.prepare(output, self.archive('linux', {'platform-tools/adb': header}), host='linux')
+        self.assertEqual((output / 'adb').read_bytes(), header)
+
+    def test_macos_arm64_rejects_thin_intel_and_accepts_universal(self):
+        output = self.root / 'output'
+        with patch.object(self.module.platform, 'machine', return_value='arm64'):
+            with self.assertRaisesRegex(ValueError, 'OS/CPU'):
+                self.module.prepare(output, self.archive('macos'), host='macos')
+            header = struct.pack('>III16xI16x', 0xcafebabe, 2, 0x01000007, 0x0100000c)
+            self.module.prepare(output, self.archive('macos', {'platform-tools/adb': header}), host='macos')
+        self.assertEqual((output / 'adb').read_bytes(), header)
 
     def test_traversal_rejected_before_copying_to_destination(self):
         with self.assertRaisesRegex(ValueError, 'Unsafe ZIP path'):

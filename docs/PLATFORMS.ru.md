@@ -19,7 +19,20 @@ JDK 17 нужен только разработчику для Gradle, тест�
 | macOS Intel | тот же каталог macOS | `desktop-resources/macos-x64/tools/` |
 | Linux x64 | `$XDG_DATA_HOME/DroidDebugHunterCompose` либо `~/.local/share/DroidDebugHunterCompose` | `desktop-resources/linux-x64/tools/` |
 
-Для ARM64 используются соответствующие каталоги `windows-arm64` и `linux-arm64`; наличие совместимых утилит/колёс Python проверяется отдельно. Windows/Linux ARM64 пока не входят в опубликованные релизные цели. В частности, если официальный Linux ADB не соответствует CPU, установите нативный ADB из дистрибутива и укажите его путь.
+Публикуемые сборки Windows и Linux рассчитаны на x64. Для локальных сборок ARM64 используются каталоги `windows-arm64` и `linux-arm64`. ZIP Google Platform Tools для macOS подходит для Intel и Apple Silicon. ZIP Google для Linux содержит ADB для x86‑64. На Linux ARM64 установите нативный пакет `adb` из своего дистрибутива (например, [Debian ARM64](https://packages.debian.org/trixie/arm64/adb)) и укажите путь к программе на вкладке «Подключение» или выберите совместимый локальный ZIP.
+
+Приложение выбирает `uv` по ОС и процессору компьютера. Python устанавливает пакеты для выбранного интерпретатора, в том числе совместимую сборку `argon2-cffi-bindings` на Intel Mac. Frida Server и Gadget выбираются по ABI Android-устройства.
+
+### mitmproxy на Intel Mac
+
+На PyPI нет wheel для Intel Mac у целевой версии `cryptography`. Используйте совместимый wheel `cryptography==50.0.2` или попробуйте собрать его тем же Intel Python, который указан в приложении. Понадобятся [инструменты сборки из документации cryptography](https://cryptography.io/en/50.0.2/installation/#building-cryptography-on-macos).
+
+```sh
+python3 -m pip wheel --no-deps --no-binary cryptography \
+  --wheel-dir /path/to/tools/downloads/wheelhouse/proxy 'cryptography==50.0.2'
+```
+
+Если задан отдельный кэш загрузок, используйте его подкаталог `wheelhouse/proxy`. Повторите настройку прокси на вкладке «Подключение». На Intel Mac приложение читает эту папку и при наличии сети, и офлайн. Для офлайн-установки положите туда также остальные wheels.
 
 В упакованном приложении комплект читается из собственных ресурсов `tools/`. Если комплекта нет, можно выбрать любую доступную папку. Пути хранятся в отдельных профилях ОС/CPU; старые Windows-настройки мигрируют только на Windows. Общие настройки интерфейса, включая язык, сохраняются между профилями. «Настройки → Язык интерфейса» переключает русский/английский сразу и сохраняет выбор для следующих запусков. Без сохранённого выбора используется русский для системной локали ru, иначе английский.
 
@@ -71,12 +84,12 @@ Windows:
 .\run.ps1 -Task packageMsi
 ```
 
-Папки результатов: `build/compose/binaries-1.1.3/main/app/`. Утилиты включаются только для ОС/CPU сборки. При отсутствии локального комплекта приложение собирается с HAR-просмотром и возможностью указать внешние утилиты.
+Папки результатов: `build/compose/binaries-1.1.4/main/app/`. Утилиты включаются только для ОС/CPU сборки. При отсутствии локального комплекта приложение собирается с HAR-просмотром и возможностью указать внешние утилиты.
 
 Проверка Windows без Java из PATH/JAVA_HOME:
 
 ```powershell
-.\scripts\smoke_windows.ps1 -ApplicationRoot .\build\compose\binaries-1.1.3\main\app\DroidDebugHunterByCompose
+.\scripts\smoke_windows.ps1 -ApplicationRoot .\build\compose\binaries-1.1.4\main\app\DroidDebugHunterByCompose
 ```
 
 Проверка запускает нативный exe с недоступными путями системной Java и убеждается, что `java.home` указывает на `runtime/` внутри сборки. Это не требует удаления установленного JDK разработчика.

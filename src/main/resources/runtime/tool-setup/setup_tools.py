@@ -39,6 +39,8 @@ def install_packages(root, name, versions, offline, cache):
     pinned = all(versions[k] == POLICY[k] for k in keys) and sys.version_info[:2] == (3, 14)
     if name == 'proxy' and versions['mitmproxy'] == POLICY['mitmproxy'] and sys.version_info[:2] < (3, 12):
         raise ValueError('mitmproxy 12.3.1 requires Python 3.12+. Choose another Python or a compatible older mitmproxy version.')
+    intel_mac_proxy = name == 'proxy' and host_key() == ('macos', 'x64')
+    wheelhouse = cache / 'wheelhouse' / name
     requested = ['-r', str(requirements)] if pinned else ([f'frida=={versions["frida"]}', f'frida-tools=={versions["fridaTools"]}', 'h11>=0.14,<1', 'hpack>=4,<5'] if name == 'capture' else [f'mitmproxy=={versions["mitmproxy"]}', f'mitmproxy_rs=={versions["mitmproxyRs"]}'])
     print('Using frozen target requirements.' if pinned else 'Custom interpreter/versions: resolving compatible dependencies from package metadata.', flush=True)
     root.mkdir(parents=True, exist_ok=True)
@@ -48,7 +50,11 @@ def install_packages(root, name, versions, offline, cache):
         command = [sys.executable, '-m', 'pip', '--isolated', 'install', '--disable-pip-version-check', '--no-input', '--ignore-installed', '--no-warn-conflicts', '--progress-bar', 'off', '--only-binary=:all:', '--target', str(stage)] + requested
         command += ['--cache-dir', str(cache / 'pip')]
         if offline:
-            command += ['--no-index', '--find-links', str(cache / 'wheelhouse' / name)]
+            command += ['--no-index']
+        if offline or (intel_mac_proxy and wheelhouse.is_dir()):
+            command += ['--find-links', str(wheelhouse)]
+        if intel_mac_proxy and pinned:
+            print(f'PyPI has no Intel macOS wheel for the target cryptography. Place a compatible wheel in {wheelhouse} and retry. See the platform guide.', flush=True)
         subprocess.run(command, env=dict(os.environ, PYTHONPATH='', PYTHONNOUSERSITE='1'), check=True)
         environment = dict(os.environ, PYTHONPATH=str(stage) + os.pathsep + str(HERE.parent / 'agents'), PYTHONNOUSERSITE='1')
         probe = 'import frida, frida_tools.repl, tls_decoder; print(frida.__version__)' if name == 'capture' else 'import mitmproxy.tools.dump, mitmproxy_rs, h11, h2, hpack; print("Proxy modules imported")'

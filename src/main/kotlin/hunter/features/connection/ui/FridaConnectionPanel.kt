@@ -3,92 +3,71 @@
 package hunter.features.connection.ui
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.material.Icon
-import androidx.compose.material.Text
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import hunter.app.AppState
-import hunter.app.Page
 import hunter.core.tr
-import hunter.features.android.Device
+import hunter.features.connection.ConnectionUiState
+import hunter.features.connection.ConnectionViewModel
 import hunter.features.connection.FridaNext
 import hunter.features.traffic.CaptureCheck
-import hunter.ui.Action
-import hunter.ui.Amber
-import hunter.ui.Check
-import hunter.ui.Green
-import hunter.ui.Muted
-import hunter.ui.Red
+import hunter.ui.ToolAction
 import hunter.ui.chooseFile
 
 @Composable
 fun FridaConnectionPanel(
-    model: AppState,
+    connection: ConnectionViewModel,
+    state: ConnectionUiState,
+    gadget: Boolean,
     enabled: Boolean,
-    selectDevice: () -> Unit,
-    configureTools: () -> Unit,
 ) {
-    val diagnosis = model.fridaDiagnosis()
+    val diagnosis = state.fridaDiagnosis
     val next = diagnosis?.next
     diagnosis?.checks?.forEach { CheckResult(it) }
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        if (next != null && next != FridaNext.Retry && next != FridaNext.Ready) {
+        if (next in setOf(FridaNext.Install, FridaNext.Start, FridaNext.Gadget, FridaNext.LaunchApp) && next != null) {
             val managesServer = next == FridaNext.Install || next == FridaNext.Start
-            Action(
+            ToolAction(
                 tr(next.label),
-                enabled = enabled && (!managesServer || !model.ownsFridaServer()),
+                enabled = enabled && (!managesServer || !state.ownsFridaServer),
                 primary = true,
             ) {
                 when (next) {
-                    FridaNext.Device -> selectDevice()
-                    FridaNext.Tools -> configureTools()
-                    FridaNext.App -> {
-                        model.page = Page.Traffic
-                        if (model.apps.isEmpty()) model.loadApps()
-                    }
-                    FridaNext.Install -> model.installFrida()
-                    FridaNext.Start -> model.startFrida()
+                    FridaNext.Install -> connection.installFrida()
+                    FridaNext.Start -> connection.startFrida()
                     FridaNext.Gadget -> {
-                        model.updateSettings(model.settings.copy(gadget = true))
-                        model.checkFrida()
+                        connection.setGadget(true)
+                        connection.checkFrida()
                     }
                     FridaNext.LaunchApp -> {
-                        model.updateSettings(model.settings.copy(spawn = true))
-                        model.checkFrida()
+                        connection.setSpawn(true)
+                        connection.checkFrida()
                     }
-                    FridaNext.Ready,
-                    FridaNext.Retry -> Unit
+                    else -> Unit
                 }
             }
         }
-        Action(
-            tr(if (next == null) "Check Frida connection" else "Check again"),
-            Icons.Outlined.Refresh,
-            enabled,
-            primary = next == null || next == FridaNext.Retry,
-        ) {
-            model.checkFrida()
+        if (state.ownsFridaServer) {
+            ToolAction(tr("Stop owned server"), Icons.Outlined.Stop, enabled, onClick = connection::stopFrida)
         }
-        if (model.ownsFridaServer()) {
-            Action(tr("Stop owned server"), Icons.Outlined.Stop, enabled, onClick = model::stopFrida)
-        }
-        if (!model.settings.gadget) {
-            Action(tr("Select file…"), enabled = enabled && model.selectedDevice?.state == "device" &&
-                !model.ownsFridaServer()) {
-                chooseFile(title = tr("frida-server (extracted ELF)"))?.let { model.installFrida(it) }
+        if (!gadget) {
+            ToolAction(tr("Install server from file…"), enabled = enabled && state.selectedDevice?.state == "device" &&
+                !state.ownsFridaServer) {
+                chooseFile(title = tr("frida-server (extracted ELF)"))?.let { connection.installFrida(it) }
             }
         }
     }
 }
 
 @Composable
-fun CheckResult(check: CaptureCheck) {
+internal fun CheckResult(check: CaptureCheck) {
+    val scheme = MaterialTheme.colorScheme
     Row(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.Top,
@@ -103,14 +82,14 @@ fun CheckResult(check: CaptureCheck) {
             Modifier.size(17.dp),
             tint =
                 when (check.ready) {
-                    true -> Green
-                    false -> Red
-                    null -> Amber
+                    true -> scheme.primary
+                    false -> scheme.error
+                    null -> scheme.onSurfaceVariant
                 },
         )
         Column {
-            Text(check.title, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-            Text(check.detail, color = Muted, fontSize = 11.sp)
+            Text(check.title, style = MaterialTheme.typography.labelLarge)
+            Text(check.detail, color = scheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
         }
     }
 }

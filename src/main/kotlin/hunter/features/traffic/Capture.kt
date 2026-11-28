@@ -2,10 +2,13 @@ package hunter.features.traffic
 
 import com.google.gson.JsonObject
 import hunter.core.AppFiles
+import hunter.core.ApplicationLog
 import hunter.core.Processes
 import hunter.core.StreamingProcess
+import hunter.core.StreamSession
 import hunter.core.flag
 import hunter.core.json
+import hunter.core.logHandledFailure
 import hunter.core.parseObject
 import hunter.core.text
 import hunter.core.tr
@@ -27,7 +30,7 @@ import kotlinx.coroutines.*
 enum class CaptureMode(private val titleKey: String, private val hintKey: String) {
     Proxy(
         "HTTP(S) proxy",
-        "Rootless · system proxy over ADB reverse. HTTPS requires CA trust. Package and UID are unknown.",
+        "Rootless · device-wide system proxy over ADB reverse. For a single app, use WireGuard or Frida. HTTPS requires CA trust.",
     ),
     OkHttp(
         "Frida · OkHttp",
@@ -48,9 +51,17 @@ enum class CaptureMode(private val titleKey: String, private val hintKey: String
     val isFrida
         get() = this == OkHttp || this == Native
 
+    val capturesSingleApp
+        get() = this != Proxy
+
+    fun requiresRoot(gadget: Boolean) = isFrida && !gadget
+
     val hint
         get() = tr(hintKey)
 }
+
+internal const val WIREGUARD_TUNNEL = "ddh"
+internal const val WIREGUARD_PROFILE = "$WIREGUARD_TUNNEL.conf"
 
 class CaptureLock : AutoCloseable {
     private val channel =
@@ -165,7 +176,7 @@ class CaptureSession(
     private val onEvent: suspend (JsonObject) -> Unit,
     private val log: (String) -> Unit,
     private val onEnded: () -> Unit,
-) {
+) : StreamSession {
     private val adb = Adb(settings)
     private var process: StreamingProcess? = null
     private var reader: Job? = null
@@ -175,7 +186,7 @@ class CaptureSession(
     @Volatile private var stopping = false
     private val ready = CompletableDeferred<Unit>()
 
-    suspend fun start() {
+    override suspend fun start() {
         val relevantTools =
             setOf("python", "adb") +
                 if (mode == CaptureMode.Proxy || mode == CaptureMode.Vpn)
@@ -187,7 +198,7 @@ class CaptureSession(
         check(adb.device(serial, "get-state").requireSuccess() == "device") {
             tr("Device unauthorized / unavailable")
         }
-        if (mode != CaptureMode.Proxy) {
+        if (mode.capturesSingleApp) {
             requireNotNull(app) { tr("Select an app") }
             adb.validateApp(serial, app)
         }
@@ -221,7 +232,7 @@ class CaptureSession(
                             "--package",
                             app.packageName,
                             "--config-out",
-                            File(profile, "ddh.conf").absolutePath,
+                            File(profile, WIREGUARD_PROFILE).absolutePath,
                             "--keyfile",
                             File(profile, "keys.json").absolutePath,
                         )
@@ -297,6 +308,9 @@ class CaptureSession(
                                     val event =
                                         runCatching { parseObject(line.substring(marker + 15)) }
                                             .getOrElse { error ->
+                                                currentCoroutineContext()[ApplicationLog]?.warning(
+                                                    "capture", "Malformed engine event · ${error.javaClass.simpleName}",
+                                                )
                                                 JsonObject().apply {
                                                     addProperty("kind", "diagnostic")
                                                     addProperty(
@@ -338,6 +352,7 @@ class CaptureSession(
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
+                    logHandledFailure("capture", "Engine output reader failed", e)
                     ready.completeExceptionally(e)
                     log(tr("Engine error: {0}", e.message))
                 } finally {
@@ -352,13 +367,14 @@ class CaptureSession(
         }
     }
 
-    suspend fun stop() =
+    override suspend fun stop() =
         withContext(NonCancellable) {
             stopping = true
             suspend fun cleanup(name: String, block: suspend () -> Unit) {
                 try {
                     withTimeout(15000) { block() }
                 } catch (e: Exception) {
+                    logHandledFailure("capture", "Cleanup failed · $name", e)
                     log("$name: ${e.message}")
                 }
             }
@@ -375,7 +391,7 @@ class CaptureSession(
                 cleanup("WireGuard") {
                     adb.shell(
                         serial,
-                        "am broadcast -a com.wireguard.android.action.SET_TUNNEL_DOWN --es tunnel ddh -p com.wireguard.android",
+                        "am broadcast -a com.wireguard.android.action.SET_TUNNEL_DOWN --es tunnel $WIREGUARD_TUNNEL -p com.wireguard.android",
                     )
                     log(tr("Check that the WireGuard tunnel is disabled on Android"))
                 }
@@ -404,7 +420,7 @@ class CaptureSession(
                     .digest("${app.packageName}|${app.user}|${endpoint(settings)}".toByteArray())
                     .take(12)
                     .joinToString("") { "%02x".format(it) }
-            return File(AppFiles.capture, "vpn/$hash").apply { mkdirs() }
+            return File(AppFiles.capture, "vpn/$hash")
         }
 
         suspend fun prepareAssets(
@@ -430,7 +446,7 @@ class CaptureSession(
                                 "--keys",
                                 File(profile, "keys.json").absolutePath,
                                 "--config",
-                                File(profile, "ddh.conf").absolutePath,
+                                File(profile, WIREGUARD_PROFILE).absolutePath,
                                 "--metadata",
                                 File(profile, "metadata.json").absolutePath,
                                 "--endpoint",
@@ -502,6 +518,9 @@ fun applyCaptureEvent(existing: Exchange?, event: JsonObject, name: String = "")
                         serial = event.text("deviceSerial"),
                         raw = true,
                         packageName = event.text("packageName"),
+                        appName = name,
+                        uid = event.text("uid"),
+                        appId = event.text("appId"),
                     ))
                 .copy(
                     error = event.text("error"),

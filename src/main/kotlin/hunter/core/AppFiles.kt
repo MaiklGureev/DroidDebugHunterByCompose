@@ -13,6 +13,7 @@ object AppFiles {
                 ))
             .apply { mkdirs() }
     val runtime = File(data, "runtime")
+    val applicationLog = File(data, "logs/application.log")
     val capture = File(data, "capture").apply { mkdirs() }
     val ca
         get() = File(capture, "proxy/mitmproxy-ca-cert.cer")

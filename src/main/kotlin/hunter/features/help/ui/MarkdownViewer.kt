@@ -22,15 +22,12 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import hunter.core.tr
-import hunter.features.help.Markdown
 import hunter.features.help.MarkdownDocument
 import hunter.features.help.children
 import hunter.ui.Accent
 import hunter.ui.Action
 import hunter.ui.Line
 import hunter.ui.Muted
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import org.commonmark.ext.gfm.strikethrough.Strikethrough
 import org.commonmark.ext.gfm.tables.TableBlock
 import org.commonmark.ext.gfm.tables.TableCell
@@ -56,53 +53,34 @@ import org.commonmark.node.ThematicBreak
 
 @Composable
 fun MarkdownViewer(
-    source: String,
+    document: MarkdownDocument,
     modifier: Modifier = Modifier,
     anchor: String? = null,
     onLink: (String) -> Unit,
     onCopy: (String) -> Unit,
 ) {
-    val parsed by
-        produceState<Result<MarkdownDocument>?>(null, source) {
-            value = null
-            value = withContext(Dispatchers.Default) { runCatching { Markdown.parse(source) } }
-        }
-    val document = parsed?.getOrNull()
     val scroll = rememberLazyListState()
     LaunchedEffect(document, anchor) {
-        if (document != null) scroll.scrollToItem(document.anchors[anchor] ?: 0)
+        scroll.scrollToItem(document.anchors[anchor] ?: 0)
     }
     Surface(modifier, color = MaterialTheme.colors.surface, shape = RoundedCornerShape(10.dp)) {
-        when {
-            parsed == null ->
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(Modifier.size(24.dp))
-                }
-            document == null ->
-                Text(
-                    parsed?.exceptionOrNull()?.message ?: tr("Guide unavailable"),
-                    Modifier.padding(20.dp),
-                    color = MaterialTheme.colors.error,
-                )
-            else ->
-                Box(Modifier.fillMaxSize()) {
-                    SelectionContainer {
-                        LazyColumn(
-                            state = scroll,
-                            modifier = Modifier.fillMaxSize().padding(end = 12.dp),
-                            contentPadding = PaddingValues(22.dp),
-                            verticalArrangement = Arrangement.spacedBy(14.dp),
-                        ) {
-                            itemsIndexed(document.blocks) { _, block ->
-                                MarkdownBlock(block, onLink, onCopy)
-                            }
-                        }
+        Box(Modifier.fillMaxSize()) {
+            SelectionContainer {
+                LazyColumn(
+                    state = scroll,
+                    modifier = Modifier.fillMaxSize().padding(end = 12.dp),
+                    contentPadding = PaddingValues(22.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp),
+                ) {
+                    itemsIndexed(document.blocks) { _, block ->
+                        MarkdownBlock(block, onLink, onCopy)
                     }
-                    VerticalScrollbar(
-                        rememberScrollbarAdapter(scroll),
-                        Modifier.align(Alignment.CenterEnd).fillMaxHeight(),
-                    )
                 }
+            }
+            VerticalScrollbar(
+                rememberScrollbarAdapter(scroll),
+                Modifier.align(Alignment.CenterEnd).fillMaxHeight(),
+            )
         }
     }
 }

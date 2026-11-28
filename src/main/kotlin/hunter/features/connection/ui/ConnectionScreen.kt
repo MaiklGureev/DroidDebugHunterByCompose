@@ -5,6 +5,7 @@
 
 package hunter.features.connection.ui
 
+import androidx.compose.desktop.ui.tooling.preview.Preview
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.VerticalScrollbar
 import androidx.compose.foundation.layout.*
@@ -15,50 +16,65 @@ import androidx.compose.foundation.rememberScrollbarAdapter
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.Icon
-import androidx.compose.material.MaterialTheme
-import androidx.compose.material.Surface
-import androidx.compose.material.Text
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.HelpOutline
 import androidx.compose.material.icons.outlined.*
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.input.pointer.PointerIcon
+import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import hunter.app.AppState
 import hunter.app.Page
 import hunter.core.tr
-import hunter.features.android.Adb
+import hunter.features.connection.FridaNext
+import hunter.features.tools.ToolComponentStatus
 import hunter.features.tools.toolComponents
 import hunter.features.tools.toolConfiguration
 import hunter.features.tools.ui.ConnectionToolsPanel
 import hunter.features.traffic.CaptureMode
-import hunter.ui.Accent
-import hunter.ui.Action
-import hunter.ui.Check
-import hunter.ui.Field
-import hunter.ui.Line
-import hunter.ui.Muted
-import hunter.ui.Panel
+import hunter.ui.HunterTheme
 import kotlinx.coroutines.launch
 
 @Composable
 fun ConnectionScreen(model: AppState) {
+    val connection = model.connection
+    val state by connection.uiState.collectAsState()
+    val settings by model.settings.uiState.collectAsState()
+    val tools by model.toolSetup.uiState.collectAsState()
     val idle = model.initialized && model.busy.isEmpty()
-    val editable = idle && !model.capturing
-    val connected = model.selectedDevice?.state == "device"
+    val capturing by model.traffic.running.collectAsState(model.traffic.uiState.value.running)
+    val editable = idle && !capturing
     val scroll = rememberScrollState()
     val scope = rememberCoroutineScope()
-    val androidConnection = remember { BringIntoViewRequester() }
-    val captureTools = remember { BringIntoViewRequester() }
-    LaunchedEffect(model.initialized, model.settings.toolConfiguration(), model.busy.isEmpty()) {
-        if (model.initialized && model.busy.isEmpty() && model.toolFindings.isEmpty()) {
-            model.refreshToolStatus()
+    val toolSettings = remember { BringIntoViewRequester() }
+    val components = state.mode.toolComponents(settings.gadget)
+    val diagnosed = state.fridaDiagnosis
+    val availableOnAndroid = buildSet {
+        if (state.mode == CaptureMode.Vpn && state.assets.wireGuardInstalled == true) add("wireguard")
+        if (state.mode.requiresRoot(settings.gadget) &&
+            diagnosed?.next in setOf(FridaNext.Start, FridaNext.LaunchApp, FridaNext.Ready)
+        ) add("server")
+    }
+    val componentStatus: (String) -> ToolComponentStatus = { id ->
+        when {
+            id == "capture" && diagnosed?.next == FridaNext.Tools && diagnosed.requiredAbi == null ->
+                ToolComponentStatus.Failed
+            id == "server" && !settings.gadget || id == "gadget" && settings.gadget ->
+                tools.componentStatus(id, diagnosed?.requiredAbi)
+            id == "capture" -> tools.componentStatus(id, nativeCapture = state.mode == CaptureMode.Native)
+            else -> tools.componentStatus(id)
         }
+    }
+
+    LaunchedEffect(idle, settings.toolConfiguration()) {
+        if (idle) model.toolSetup.refreshIfNeeded()
+    }
+    LaunchedEffect(idle, state.mode, state.selectedDevice, state.selectedApp, settings) {
+        if (idle) connection.refreshCaptureAssets()
     }
 
     Box(Modifier.fillMaxSize()) {
@@ -66,99 +82,32 @@ fun ConnectionScreen(model: AppState) {
             Modifier.fillMaxSize().padding(end = 12.dp).verticalScroll(scroll),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            Panel(tr("Capture method"), modifier = Modifier.fillMaxWidth()) {
-                FlowRow(
-                    Modifier.fillMaxWidth().selectableGroup(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    for (mode in CaptureMode.entries) {
-                        val selected = mode == model.mode
-                        val icon = when (mode) {
-                            CaptureMode.Proxy -> Icons.Outlined.Language
-                            CaptureMode.OkHttp, CaptureMode.Native -> Icons.Outlined.BugReport
-                            CaptureMode.Vpn -> Icons.Outlined.VpnKey
-                        }
-                        Surface(
-                            modifier = Modifier.width(178.dp)
-                                .selectable(selected, editable, role = Role.RadioButton) { model.mode = mode },
-                            shape = MaterialTheme.shapes.medium,
-                            border = BorderStroke(1.dp, if (selected) Accent else Line),
-                            color = if (selected) Accent.copy(alpha = 0.08f) else MaterialTheme.colors.surface,
-                        ) {
-                            Row(
-                                Modifier.heightIn(min = 52.dp).padding(horizontal = 12.dp, vertical = 8.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            ) {
-                                Icon(icon, null, Modifier.size(19.dp), tint = if (selected) Accent else Muted)
-                                Text(mode.title, fontWeight = FontWeight.SemiBold)
-                            }
-                        }
-                    }
-                }
-                Text(model.mode.hint, color = Muted)
+            AndroidConnectionWizard(connection, state, idle)
+            ConnectionSection(tr("Capture method")) {
+                CaptureMethodPicker(state.mode, settings.gadget, editable, connection::setMode)
             }
-            Box(Modifier.bringIntoViewRequester(androidConnection)) {
-                AndroidConnectionWizard(model, idle)
-            }
-            ConnectionToolsPanel(
-                model,
-                model.mode.toolComponents(model.settings.gadget),
-                modifier = Modifier.bringIntoViewRequester(captureTools),
-            )
-
-            if (model.mode.isFrida) {
-                Panel(
-                    "Frida",
-                    tr("Target Frida {0} · server matches the active client and ABI", Adb.FRIDA_VERSION),
-                    Modifier.fillMaxWidth(),
-                ) {
-                    Check(tr("Rootless: debuggable + run-as + Gadget"), model.settings.gadget, editable) {
-                        model.updateSettings(model.settings.copy(gadget = it))
-                    }
-                    Check(tr("Launch app at startup"), model.settings.spawn, editable) {
-                        model.updateSettings(model.settings.copy(spawn = it))
-                    }
-                    FridaConnectionPanel(
-                        model,
-                        editable,
-                        selectDevice = {
-                            scope.launch { androidConnection.bringIntoView(Rect(0f, 0f, 1f, 32f)) }
-                        },
-                        configureTools = {
-                            scope.launch { captureTools.bringIntoView(Rect(0f, 0f, 1f, 32f)) }
-                        },
-                    )
-                }
-            } else {
-                Panel(tr("HTTPS certificate"), modifier = Modifier.fillMaxWidth()) {
-                    Text(tr("Prepare the CA, send it to Android and install it manually as a CA certificate. The app must trust user CAs."))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Action(tr("Prepare CA"), enabled = editable) { model.prepareCapture(false) }
-                        Action(tr("Send CA"), enabled = idle && connected, onClick = model::sendCa)
-                    }
-                }
-                if (model.mode == CaptureMode.Vpn) {
-                    WireGuardSettings(model, editable, connected)
-                }
-            }
-
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                Action(tr("Open Traffic"), Icons.Outlined.SwapVert, primary = true) {
+            CaptureSetupPanel(
+                model = model,
+                state = state,
+                settings = settings,
+                components = listOf("adb") + components.filterNot { it in availableOnAndroid },
+                status = componentStatus,
+                editable = editable,
+                capturing = capturing,
+                selectDevice = { scope.launch { scroll.animateScrollTo(0) } },
+                configureTools = { scope.launch { toolSettings.bringIntoView(Rect(0f, 0f, 1f, 32f)) } },
+                chooseApp = {
                     model.page = Page.Traffic
-                }
-                if (!model.mode.isFrida) {
-                    Action(tr("Check readiness"), enabled = editable, onClick = model::checkCapture)
-                }
-                Action(tr("User guide"), Icons.AutoMirrored.Outlined.HelpOutline) {
-                    model.page = Page.Help
-                }
-            }
-            if (!model.mode.isFrida) model.modeChecks.forEach { CheckResult(it) }
+                    if (state.apps.isEmpty()) connection.loadApps()
+                },
+            )
+            ConnectionToolsPanel(
+                model = model,
+                captureComponents = components,
+                modifier = Modifier.bringIntoViewRequester(toolSettings),
+                componentStatus = componentStatus,
+                availableOnAndroid = availableOnAndroid,
+            )
         }
         VerticalScrollbar(
             rememberScrollbarAdapter(scroll),
@@ -168,40 +117,96 @@ fun ConnectionScreen(model: AppState) {
 }
 
 @Composable
-private fun WireGuardSettings(model: AppState, editable: Boolean, connected: Boolean) {
-    val app = model.selectedApp
-    Panel("WireGuard", modifier = Modifier.fillMaxWidth()) {
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Field(
-                model.settings.vpnHost,
-                { model.updateSettings(model.settings.copy(vpnHost = it)) },
-                tr("Computer IP / DNS"),
-                Modifier.weight(1f),
-                editable,
-            )
-            Field(
-                model.settings.vpnPort,
-                { model.updateSettings(model.settings.copy(vpnPort = it)) },
-                tr("UDP port"),
-                Modifier.width(130.dp),
-                editable,
-            )
-        }
-        Text(
-            if (app == null) tr("Choose the target app on Traffic to prepare its VPN profile.")
-            else tr("App: {0}", app.label),
-            color = Muted,
-        )
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Action(tr("Prepare profile"), enabled = editable && app != null) {
-                model.prepareCapture(true)
+internal fun ConnectionSection(
+    title: String,
+    actions: @Composable (() -> Unit)? = null,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Surface(shape = MaterialTheme.shapes.medium, border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)) {
+        Column(
+            Modifier.fillMaxWidth().padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Text(title, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
+                actions?.invoke()
             }
-            Action(tr("Send to WireGuard"), enabled = editable && connected && app != null,
-                onClick = model::sendVpn)
+            content()
         }
-        Text(
-            tr("Allow the UDP port in your firewall. WireGuard: + → Import from file → Download/ddh.conf. Enable the tunnel after starting the server. Allow Remote control for automatic shutdown."),
-            color = Muted,
-        )
+    }
+}
+
+@Composable
+private fun CaptureMethodPicker(
+    current: CaptureMode,
+    gadget: Boolean,
+    editable: Boolean,
+    select: (CaptureMode) -> Unit,
+) {
+    val scheme = MaterialTheme.colorScheme
+    FlowRow(
+        Modifier.fillMaxWidth().selectableGroup(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        for (mode in CaptureMode.entries) {
+            val selected = mode == current
+            val icon = when (mode) {
+                CaptureMode.Proxy -> Icons.Outlined.Language
+                CaptureMode.OkHttp, CaptureMode.Native -> Icons.Outlined.BugReport
+                CaptureMode.Vpn -> Icons.Outlined.VpnKey
+            }
+            Surface(
+                modifier = Modifier.width(184.dp)
+                    .pointerHoverIcon(if (editable) PointerIcon.Hand else PointerIcon.Default)
+                    .selectable(selected, editable, role = Role.RadioButton) { select(mode) },
+                shape = MaterialTheme.shapes.small,
+                border = BorderStroke(1.dp, if (selected) scheme.primary else scheme.outlineVariant),
+                color = if (selected) scheme.secondaryContainer else scheme.surface,
+                contentColor = if (selected) scheme.onSecondaryContainer else scheme.onSurface,
+            ) {
+                Row(
+                    Modifier.heightIn(min = 64.dp).padding(10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Icon(icon, contentDescription = null, Modifier.size(20.dp))
+                    Column {
+                        Text(mode.title, style = MaterialTheme.typography.labelLarge)
+                        Text(
+                            tr(when {
+                                mode.requiresRoot(gadget) -> "Root required"
+                                mode.isFrida -> "Gadget · No root required"
+                                else -> "No root required"
+                            }),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (selected) scheme.onSecondaryContainer else scheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+        }
+    }
+    Text(current.hint, style = MaterialTheme.typography.bodySmall, color = scheme.onSurfaceVariant)
+}
+
+@Preview
+@Composable
+private fun LightCaptureMethodsPreview() = CaptureMethodsPreview(dark = false)
+
+@Preview
+@Composable
+private fun DarkCaptureMethodsPreview() = CaptureMethodsPreview(dark = true)
+
+@Composable
+private fun CaptureMethodsPreview(dark: Boolean) {
+    HunterTheme(dark) {
+        ConnectionSection(tr("Capture method")) {
+            CaptureMethodPicker(CaptureMode.Native, gadget = dark, editable = true, select = {})
+        }
     }
 }

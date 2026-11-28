@@ -1,6 +1,9 @@
 package hunter.features.logcat
 
+import hunter.core.logHandledFailure
+
 import hunter.core.StreamingProcess
+import hunter.core.StreamSession
 import hunter.core.tr
 import hunter.features.android.Adb
 import hunter.features.android.AndroidApp
@@ -23,13 +26,13 @@ class LogcatSession(
     private val onEntry: (LogEntry) -> Unit,
     private val log: (String) -> Unit,
     private val ended: () -> Unit,
-) {
+) : StreamSession {
     private var process: StreamingProcess? = null
     private var reader: Job? = null
     private var watcher: Job? = null
     @Volatile private var stopping = false
 
-    suspend fun start() {
+    override suspend fun start() {
         val adb = Adb(settings)
         check(adb.device(serial, "get-state").requireSuccess() == "device") {
             tr("Device unavailable")
@@ -55,7 +58,7 @@ class LogcatSession(
         args += listOf("-T", options.history.coerceIn(1, 5000).toString())
         if (options.appOnly && filterUid) args += "--uid=${app!!.uid}"
         args += "*:V"
-        val owned = StreamingProcess.start(args)
+        val owned = StreamingProcess.start(args, terminateDescendants = false)
         process = owned
         reader =
             scope.launch(Dispatchers.IO) {
@@ -108,6 +111,7 @@ class LogcatSession(
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
+                    logHandledFailure("logcat", "ADB stream reader failed", e)
                     log("Logcat: ${e.message}")
                 } finally {
                     if (!stopping) ended()
@@ -124,6 +128,7 @@ class LogcatSession(
                     } catch (e: CancellationException) {
                         throw e
                     } catch (e: Exception) {
+                        logHandledFailure("logcat", "Android target validation failed", e)
                         log(tr("Logcat stopped: {0}", e.message))
                         ended()
                     }
@@ -134,7 +139,7 @@ class LogcatSession(
         }
     }
 
-    suspend fun stop() =
+    override suspend fun stop() =
         withContext(NonCancellable) {
             stopping = true
             watcher?.cancelAndJoin()
